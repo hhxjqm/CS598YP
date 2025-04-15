@@ -17,12 +17,13 @@ This project provides a Docker-based environment to test the **ingestion perform
 
 ---
 
-## 📦 1. Build the Docker Image
+## 1. Build the Docker Image
 
 ```bash
 docker build -t duckdb-ingest .
 ```
 
+## 2. Run the Container with Resource Limits
 ```bash
 docker run --rm -it \
   --memory=4g --memory-swap=4g \
