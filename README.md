@@ -23,7 +23,7 @@ This project provides a Docker-based environment to test the **ingestion perform
 docker build -t duckdb-ingest .
 ```
 
-## 2. Run the Container with Resource Limits
+## 2. Run the Container with Resource Limits (4GB of memory and 2 CPU cores)
 ```bash
 docker run --rm -it \
   --memory=4g --memory-swap=4g \
