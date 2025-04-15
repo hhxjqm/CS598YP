@@ -1,4 +1,5 @@
 import duckdb, time, numpy as np, psutil, os, socket, csv
+from datetime import datetime  # ✅ 用于生成合法的 TIMESTAMP 类型
 
 # 参数配置
 DB_FILE = "test.duckdb"
@@ -20,7 +21,7 @@ with open(CSV_LOG, mode='w', newline='') as f:
 
     for i in range(NUM_BATCHES):
         t0 = time.time()
-        now = time.time()
+        now = datetime.now()  # ✅ 合法的 TIMESTAMP 值
         data = [(j + i * BATCH_SIZE, now, np.random.rand()) for j in range(BATCH_SIZE)]
         con.executemany("INSERT INTO data VALUES (?, ?, ?)", data)
         elapsed = time.time() - t0
