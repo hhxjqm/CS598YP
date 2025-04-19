@@ -4,16 +4,11 @@ This project provides a Docker-based environment to test the **ingestion perform
 
 ---
 
-## ✅ Features
+## ✅ Goals
 
-- DuckDB embedded database
-- Automatic logging of:
-  - Batch number
-  - Inserted rows
-  - Time taken per batch
-  - Memory usage (RSS)
-  - CPU utilization
-- Results written to `ingestion_log.csv`
+- 分析 ingestion rate drop 的原因
+
+- 测试 DuckDB 的极限（系统崩不崩、何时崩）
 
 ---
 
@@ -30,4 +25,14 @@ docker run --rm -it \
   --cpus=2 \
   -v "$PWD":/test \
   duckdb-ingest
+```
+
+## 3. Run test1.py
+```bash
+python test1.py
+```
+
+## 4. plot
+```bash
+python plot.py
 ```

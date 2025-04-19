@@ -1,2 +1,7 @@
 ingestion_log.csv
 test.duckdb
+
+data_set
+log
+*.duckdb
+plots

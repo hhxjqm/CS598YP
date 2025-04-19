@@ -12,7 +12,8 @@ RUN pip install --no-cache-dir \
     pandas \
     numpy \
     tqdm \
-    psutil
+    psutil \
+    matplotlib
 
 WORKDIR /test
 
