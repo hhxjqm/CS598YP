@@ -4,3 +4,4 @@ test.duckdb
 data_set
 log
 *.duckdb
+db
