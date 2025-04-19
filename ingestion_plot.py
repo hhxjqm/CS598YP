@@ -6,10 +6,10 @@ import os # 导入 os 模块用于创建目录
 
 # --- 配置参数 ---
 # 日志文件路径 (与你的脚本一致)
-log_file = 'log2/ingestion_log.jsonl' # 确保这个路径是正确的
+log_file = 'log/ingestion_log_2cpu_2ram.jsonl' # 确保这个路径是正确的
 
 # 图表保存路径和文件名
-output_plot_path = 'plots/ingestion_metrics.png' # 示例：保存到 plots 目录下的 png 文件
+output_plot_path = 'plots/ingestion_metrics_2cpu_2ram.png' # 示例：保存到 plots 目录下的 png 文件
 
 # --- 确保图表输出目录存在 ---
 output_dir = os.path.dirname(output_plot_path)

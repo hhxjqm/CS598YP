@@ -10,7 +10,7 @@ import pandas as pd # 使用 pandas 来分块读取 CSV
 # CSV 数据文件路径 (使用 Google Drive 挂载路径)
 csv_file = 'data_set/2023_Yellow_Taxi_Trip_Data.csv'
 # 日志文件路径 (使用 Google Drive 挂载路径)
-log_file = 'log/ingestion_log.jsonl' # 使用 .jsonl 格式，每行一个 JSON 对象
+log_file = 'log/ingestion_log_2cpu_2ram.jsonl' # 使用 .jsonl 格式，每行一个 JSON 对象
 # DuckDB 数据库文件路径 (使用 Google Drive 挂载路径)
 db_file = 'db/taxi_data.duckdb' # 修改数据库文件名为更具描述性的名字
 # 目标表名
