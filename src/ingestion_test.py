@@ -8,11 +8,11 @@ import pandas as pd # 使用 pandas 来分块读取 CSV
 
 # --- 配置参数 ---
 # CSV 数据文件路径 (使用 Google Drive 挂载路径)
-csv_file = 'data_set/2023_Yellow_Taxi_Trip_Data.csv'
+csv_file = '/test/data_set/2023_Yellow_Taxi_Trip_Data.csv'
 # 日志文件路径 (使用 Google Drive 挂载路径)
-log_file = 'log/ingestion_log_1cpu.jsonl' # 使用 .jsonl 格式，每行一个 JSON 对象
+log_file = '/test/log/ingestion_log_2cpu_2ram.jsonl' # 使用 .jsonl 格式，每行一个 JSON 对象
 # DuckDB 数据库文件路径 (使用 Google Drive 挂载路径)
-db_file = 'db/taxi_data_1cpu.duckdb' # 修改数据库文件名为更具描述性的名字
+db_file = '/test/db/taxi_data.duckdb'  # 修改数据库文件名为更具描述性的名字
 # 目标表名
 table_name = 'yellow_taxi_trips'
 # CSV 读取的块大小 (行数) - 影响每次插入的数据量和监控的粒度
@@ -163,16 +163,15 @@ def ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size):
                              print(f"Warning: Data type casting error in chunk {chunk_index}: {cast_error}")
                              # You might want to log this warning but continue unless casting is critical
 
-                        print(f"处理块 {chunk_index} ({rows_in_chunk} 行)...")
 
-                        # --- 在此处添加热点模拟 ---
-                        apply_hot_skew(chunk_df)
+                        print(f"处理块 {chunk_index} ({rows_in_chunk} 行)...")
 
                         # --- 插入数据块并计时 ---
                         start_time = time.time()
                         # 获取插入前的系统指标 (特别是磁盘 I/O)
                         pre_insert_metrics = get_system_metrics()
                         pre_disk_io = pre_insert_metrics.get('disk_io_counters', None)
+
 
                         try:
                             # --- 使用 DuckDB 的 from_df 方法将 pandas DataFrame 快速插入 (修正参数顺序) ---
@@ -276,12 +275,6 @@ def ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size):
                     print(f"读取或处理 CSV 块时发生意外错误: {e}")
 
             print("\n所有数据块处理完毕。")
-        # --- 构建索引以加剧热点冲击场景 ---
-        try:
-            con.execute("CREATE INDEX idx_hot_key ON yellow_taxi_trips(hot_key);")
-            print("索引 idx_hot_key 创建成功。")
-        except Exception as e:
-            print(f"创建索引时出错: {e}")
 
         # Database connection is closed automatically when exiting the 'with' block
         print("DuckDB 连接已关闭。")
@@ -300,28 +293,6 @@ def ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size):
         print(f"整体平均插入速率: {overall_avg_rate:.2f} 行/秒")
         print(f"详细日志已保存到: {log_file}")
         print("请检查日志文件分析插入速率下降的原因，并结合系统监控数据（CPU、内存、磁盘 I/O）。")
-
-import numpy as np
-
-HOT_SHARE   = 0.9          # 90% 行命中热点
-HOT_VALUES  = [1, 2, 3]    # 3 个超热点键
-COLD_RANGE  = (100, 10_000)  # 其余键范围
-
-def apply_hot_skew(df):
-    rows = len(df)
-
-    # ① 生成热点掩码
-    hot_mask = np.random.rand(rows) < HOT_SHARE            # True → 该行写入热点
-
-    # ② 生成键值
-    hot_keys  = np.random.choice(HOT_VALUES,   size=hot_mask.sum())
-    cold_keys = np.random.randint(*COLD_RANGE, size=rows - hot_mask.sum())
-
-    # ③ 写回到目标列；示范用已有字段 vendorid
-    df.loc[ hot_mask, 'vendorid'] = hot_keys
-    df.loc[~hot_mask, 'vendorid'] = cold_keys
-
-    # 若采用新列 df['hot_key'] = np.where(hot_mask, hot_keys, cold_keys)
 
 
 # --- Run script ---
