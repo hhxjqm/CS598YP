@@ -10,13 +10,19 @@ import pandas as pd # 使用 pandas 来分块读取 CSV
 # CSV 数据文件路径 (使用 Google Drive 挂载路径)
 csv_file = 'data_set/2023_Yellow_Taxi_Trip_Data.csv'
 # 日志文件路径 (使用 Google Drive 挂载路径)
-log_file = 'log/ingestion_log_2cpu_2ram.jsonl' # 使用 .jsonl 格式，每行一个 JSON 对象
+log_file = 'log/ingestion_log_2cpu_256mbram.jsonl' # 使用 .jsonl 格式，每行一个 JSON 对象
 # DuckDB 数据库文件路径 (使用 Google Drive 挂载路径)
 db_file = 'db/taxi_data.duckdb' # 修改数据库文件名为更具描述性的名字
 # 目标表名
 table_name = 'yellow_taxi_trips'
 # CSV 读取的块大小 (行数) - 影响每次插入的数据量和监控的粒度
 chunk_size = 10000 # 可以根据内存和CPU调整，太小开销大，太大监控不精细
+# DuckDB 内存限制，例如 '4GB', '256MB'
+duckdb_memory_limit = '4GB'; # <<<<<<< 在这里设置 DuckDB 的内存限制 >>>>>>>
+# DuckDB 并行线程数限制，例如 2 (可选，根据需要调整)
+# SET threads = N 可以限制CPU使用，有助于控制资源
+# duckdb_threads = 2 # <<<<<<< 可选：在这里设置 DuckDB 的线程数限制 >>>>>>>
+
 # 系统信息采样间隔 (每次块插入后记录)
 # psutil.cpu_percent(interval=None) 是非阻塞的，适合在每次块插入后快速获取
 # 如果需要更细粒度的系统采样，可以在单独的线程中进行，但这里简化为每次块插入后采样
@@ -58,7 +64,7 @@ def get_system_metrics():
     return metrics
 
 # --- 主插入和监控函数 ---
-def ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size):
+def ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size, memory_limit): # Added memory_limit parameter
     total_rows_ingested = 0
     total_time_taken = 0
     chunk_index = 0
@@ -67,13 +73,26 @@ def ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size):
     print(f"开始从 {csv_file} 插入数据到 DuckDB 数据库 {db_file} 的表 {table_name}")
     print(f"日志将记录到 {log_file}")
     print(f"块大小 (chunk size): {chunk_size} 行")
+    print(f"DuckDB 内存限制设置为: {memory_limit}") # Print the set memory limit
+    # if 'duckdb_threads' in globals(): # Print threads limit if set
+    #     print(f"DuckDB 线程数限制设置为: {duckdb_threads}")
+
 
     # 使用 with 语句确保连接和文件关闭
     try:
         # 连接到 DuckDB 数据库 (如果不存在则创建)
         # errors='ignore' on read_csv_auto can sometimes help with malformed lines, but might hide data issues
-        with duckdb.connect(database=db_file, read_only=False) as con: # --- Removed config parameter ---
+        # Pass configuration options including memory_limit
+        config = {'memory_limit': memory_limit}
+        # if 'duckdb_threads' in globals(): # Add threads to config if set
+        #     config['threads'] = duckdb_threads
+
+        with duckdb.connect(database=db_file, read_only=False, config=config) as con: # <<<<<<< 在这里传入 config 参数 >>>>>>>
             print("成功连接到 DuckDB 数据库。")
+            # Optionally verify the setting was applied
+            # current_mem_limit = con.execute("SELECT current_setting('memory_limit');").fetchone()[0]
+            # print(f"DuckDB 报告的当前内存限制: {current_mem_limit}")
+
 
             # 准备表：如果表已存在，删除它以便重新开始
             try:
@@ -174,9 +193,9 @@ def ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size):
 
 
                         try:
-                            # --- 使用 DuckDB 的 from_df 方法将 pandas DataFrame 快速插入 (修正参数顺序) ---
+                            # --- 使用 DuckDB 的 from_df 方法将 pandas DataFrame 快速插入 ---
                             # This method uses the DuckDB API directly and avoids the execute parameter binding issue
-                            duckdb.from_df(chunk_df, connection=con).insert_into(table_name) # --- Corrected Insertion Method Call ---
+                            duckdb.from_df(chunk_df, connection=con).insert_into(table_name)
 
                         except Exception as e:
                              print(f"插入块 {chunk_index} 时发生错误: {e}")
@@ -297,4 +316,5 @@ def ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size):
 
 # --- Run script ---
 if __name__ == "__main__":
-    ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size)
+    # Pass the memory_limit to the ingestion function
+    ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size, duckdb_memory_limit)

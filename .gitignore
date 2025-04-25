@@ -1,6 +1,8 @@
 ingestion_log.csv
 test.duckdb
 
-data_set
+db
 log
 *.duckdb
+.DS_Store
+data_set
