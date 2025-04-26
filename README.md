@@ -168,7 +168,6 @@ python /test/src/ingestion_plot_streamwrite.py \
 ```
 
 
-
 ### 2. Querying DuckDB
 ```bash
 python /test/src/query_test.py \
@@ -199,6 +198,19 @@ python /test/src/query_plot.py \
   --title "DuckDB Query Performance - 1 Hour Testing" \
   --width 15 \
   --height 8
+
+
+## 4. sqlite3 跑相同的测试
+```bash
+python /test/src/sqlite/ingestion_test_streamwrite.py \
+  --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
+  --db /test/db/test_sqlite/test_streamwrite.sqlite3 \
+  --table yellow_taxi_test_streamwrite \
+  --log /test/log/test_runs/sqlite3/streamwrite_random_1h_log.jsonl \
+  --max-seconds 3600 \
+  --delay-min 0.1 \
+  --delay-max 1.0
+```
 
 
 # 📘 DuckDB Ingestion Benchmark with Resource Monitoring
