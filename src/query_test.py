@@ -6,7 +6,7 @@ import json
 import argparse
 from datetime import datetime
 import os
-from ingestion_test import get_system_metrics
+from ingestion_test import get_system_metrics, get_system_metrics_docker
 
 # --- 查询生成器：基于时间窗口，有问题命中次数太少。。。 ---
 def random_time_filter(df):
@@ -23,7 +23,15 @@ def random_time_filter(df):
     # return f"SELECT * FROM {{table}} WHERE tpep_pickup_datetime >= '{d1}' AND tpep_pickup_datetime < '{d2}'", "time_window"
     pass
 
+#  按 payment_type + passenger_count 聚合统计（多列 group by）
+def groupby_payment_and_passenger(df):
+    return (
+        "SELECT payment_type, passenger_count, COUNT(*) "
+        "FROM {table} GROUP BY payment_type, passenger_count",
+        "groupby_multi"
+    )
 
+# Generate random months and only query the data within that month
 def random_month_filter(df):
     try:
         df['tpep_pickup_datetime'] = pd.to_datetime(
@@ -83,7 +91,7 @@ def run_query(con, sql):
     start = time.time()
     result = con.execute(sql).fetchall()
     end = time.time()
-    sys_metrics = get_system_metrics()
+    sys_metrics = get_system_metrics_docker()
     return {
         'row_count': len(result),
         'time_taken_seconds': round(end - start, 5),
@@ -91,6 +99,9 @@ def run_query(con, sql):
         'memory_percent': sys_metrics.get('memory_percent', -1),
         'memory_used_gb': sys_metrics.get('memory_used_gb', -1)
     }
+    
+
+
 
 # --- 主测试逻辑：循环执行查询，实时写入日志 ---
 def benchmark_queries(db_path, table_name, sample_csv, log_path, rounds, max_seconds=None):

@@ -57,6 +57,74 @@ def get_system_metrics():
 
     return metrics
 
+
+def get_system_metrics_docker():
+    def read_first_line(path):
+        try:
+            with open(path, 'r') as f:
+                return f.readline().strip()
+        except:
+            return None
+
+    """获取容器内自身资源使用（兼容 cgroup v1 / v2）"""
+    metrics = {}
+
+    try:
+        # CPU 使用率（psutil 读的是宿主机，容器限制需另补充）
+        metrics['cpu_percent'] = psutil.cpu_percent(interval=0.1)
+
+        # 内存读取（优先 cgroup v2，再 fallback 到 v1）
+        mem_limit = None
+        mem_usage = None
+
+        if os.path.exists("/sys/fs/cgroup/memory.max"):  # cgroup v2
+            mem_limit_str = read_first_line("/sys/fs/cgroup/memory.max")
+            mem_usage_str = read_first_line("/sys/fs/cgroup/memory.current")
+            if mem_limit_str and mem_limit_str != "max":
+                mem_limit = int(mem_limit_str)
+            if mem_usage_str:
+                mem_usage = int(mem_usage_str)
+
+        elif os.path.exists("/sys/fs/cgroup/memory/memory.limit_in_bytes"):  # cgroup v1
+            mem_limit = int(read_first_line("/sys/fs/cgroup/memory/memory.limit_in_bytes"))
+            mem_usage = int(read_first_line("/sys/fs/cgroup/memory/memory.usage_in_bytes"))
+
+        if mem_limit and mem_usage:
+            mem_usage_gb = mem_usage / (1024 ** 3)
+            mem_limit_gb = mem_limit / (1024 ** 3)
+            mem_available_gb = max(mem_limit_gb - mem_usage_gb, 0)
+            mem_percent = round(mem_usage / mem_limit * 100, 2)
+
+            metrics['memory_percent'] = mem_percent
+            metrics['memory_used_gb'] = round(mem_usage_gb, 2)
+            metrics['memory_available_gb'] = round(mem_available_gb, 2)
+        else:
+            metrics['memory_percent'] = -1
+            metrics['memory_used_gb'] = -1
+            metrics['memory_available_gb'] = -1
+
+        # 磁盘 I/O
+        try:
+            io = psutil.disk_io_counters()
+            metrics['disk_io_counters'] = {
+                'read_bytes': io.read_bytes,
+                'write_bytes': io.write_bytes,
+                'read_count': io.read_count,
+                'write_count': io.write_count
+            }
+        except:
+            metrics['disk_io_counters'] = None
+
+    except Exception as e:
+        print(f"获取系统指标时发生错误: {e}")
+        metrics['error'] = str(e)
+        if 'cpu_percent' not in metrics: metrics['cpu_percent'] = -1
+        if 'memory_percent' not in metrics: metrics['memory_percent'] = -1
+        metrics['disk_io_counters'] = None
+
+    return metrics
+
+
 # --- 主插入和监控函数 ---
 def ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size):
     total_rows_ingested = 0
@@ -114,7 +182,7 @@ def ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size):
                     print("成功创建 CSV 读取迭代器。")
 
                     # 获取初始磁盘 I/O 计数器
-                    initial_metrics = get_system_metrics()
+                    initial_metrics = get_system_metrics_docker()
                     prev_disk_io_counters = initial_metrics.get('disk_io_counters', None)
 
 
@@ -169,7 +237,7 @@ def ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size):
                         # --- 插入数据块并计时 ---
                         start_time = time.time()
                         # 获取插入前的系统指标 (特别是磁盘 I/O)
-                        pre_insert_metrics = get_system_metrics()
+                        pre_insert_metrics = get_system_metrics_docker()
                         pre_disk_io = pre_insert_metrics.get('disk_io_counters', None)
 
 
@@ -189,7 +257,7 @@ def ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size):
                                 'rows_attempted': rows_in_chunk,
                                 'start_time_utc': start_time,
                                 'end_time_utc': time.time(),
-                                'system_metrics_at_error': get_system_metrics() # 记录出错时的系统状态
+                                'system_metrics_at_error': get_system_metrics_docker() # 记录出错时的系统状态
                              }
                              log_f.write(json.dumps(log_entry) + '\n')
                              log_f.flush() # Ensure log is written immediately
@@ -212,7 +280,7 @@ def ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size):
                         ingestion_rate_rows_per_sec = rows_in_chunk / time_taken_chunk
 
                         # --- 记录块处理后的系统指标 ---
-                        post_insert_metrics = get_system_metrics()
+                        post_insert_metrics = get_system_metrics_docker()
                         post_disk_io = post_insert_metrics.get('disk_io_counters', None)
 
 

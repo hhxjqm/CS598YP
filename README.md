@@ -132,27 +132,45 @@ python ingestion_plot.py
 
 ### 1. Stream Writing
 ```bash
-# Stream Writing for one hour
+#单表，随机行数插入，有波动。
 python /test/src/ingestion_test_streamwrite.py \
   --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
   --db /test/db/test_duckdb/test_streamwrite.duckdb \
   --table yellow_taxi_test_streamwrite \
-  --log /test/log/test_runs/streamwrite_1h_log.jsonl \
+  --log /test/log/test_runs/streamwrite_random_1h_log.jsonl \
   --max-seconds 3600 \
   --delay-min 0.1 \
   --delay-max 1.0
 
-# Plot the result
+# 生成图表
 python /test/src/ingestion_plot_streamwrite.py \
-  --log /test/log/test_runs/streamwrite_1h_log.jsonl \
-  --out /test/plots/streamwrite_1h_metrics.png \
+  --log /test/log/test_runs/streamwrite_random_1h_log.jsonl \
+  --out /test/plots/streamwrite_random_1h.png \
   --title "StreamWrite Ingestion - 1 Hour Test"
 ```
 
-### 2. Querying DuckDB
-
 ```bash
-# Generate Random Query to DuckDb, Single Table Scenario, resuing yellow_taxi_trips table
+# 每个batch固定行数写入，写入间隔0.5秒
+python /test/src/ingestion_test_streamwrite.py \
+  --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
+  --db /test/db/test_duckdb/test_streamwrite.duckdb \
+  --table yellow_taxi_test_streamwrite \
+  --log /test/log/test_runs/streamwrite_fixed_1h_log.jsonl \
+  --max-seconds 3600 \
+  --mode fixed_rows
+```
+
+# Plot the result
+python /test/src/ingestion_plot_streamwrite.py \
+  --log /test/log/test_runs/streamwrite_fixed_1h_log.jsonl \
+  --out /test/plots/streamwrite_fixed_1h.png \
+  --title "StreamWrite Ingestion - 1 Hour Test"
+```
+
+
+
+### 2. Querying DuckDB
+```bash
 python /test/src/query_test.py \
   --db /test/db/taxi_data.duckdb \
   --table yellow_taxi_trips \
@@ -170,7 +188,17 @@ python /test/src/query_plot.py \
   --height 8
 ```
 
+## 3. query 和 write 同时执行。
+duckdb不能同时读取相同的数据库文件。所以必须对被测数据库做一个readonly备份。
+./scripts/mixed_test.sh
 
+
+python /test/src/query_plot.py \
+  --log /test/log/test_runs/mixed_test_1h_log_query.jsonl \
+  --out /test/plots/mixed_test_query_1h_metrics.png \
+  --title "DuckDB Query Performance - 1 Hour Testing" \
+  --width 15 \
+  --height 8
 
 
 # 📘 DuckDB Ingestion Benchmark with Resource Monitoring
