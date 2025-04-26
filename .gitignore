@@ -5,4 +5,6 @@ db
 log
 *.duckdb
 .DS_Store
-data_set
+rocksdb_test
+data_set/2023_Yellow_Taxi_Trip_Data.csv
+data_set/taxi_data.json
