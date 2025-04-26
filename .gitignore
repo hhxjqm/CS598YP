@@ -1,8 +1,6 @@
-ingestion_log.csv
 test.duckdb
 
-db
-log
+db/
 *.duckdb
 .DS_Store
 rocksdb_test
