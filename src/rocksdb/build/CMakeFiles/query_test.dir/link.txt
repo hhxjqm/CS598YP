@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/query_test.dir/query_test.cpp.o -o query_test  /usr/lib/x86_64-linux-gnu/librocksdb.so -lpthread 

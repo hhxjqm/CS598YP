@@ -6,7 +6,8 @@ import pandas as pd
 from datetime import datetime
 import json
 import argparse
-from ingestion_test import get_system_metrics, get_system_metrics_docker
+from src.ingestion_test import get_system_metrics, get_system_metrics_docker
+import psutil
 
 def simulate_random_streaming(csv_file, db_file, table_name, log_file,
                               max_rows=None, max_seconds=None, delay_range=(0.1, 1.0),
@@ -34,7 +35,7 @@ def simulate_random_streaming(csv_file, db_file, table_name, log_file,
                 # --- 写入策略 ---
                 if mode == 'fixed_rows':
                     batch_size = 10
-                    delay = 0.5
+                    delay = 1.0
                 elif mode == 'scheduled_pattern':
                     minutes_passed = int((time.time() - start_time) // 60)
                     batch_size = (minutes_passed % 12) + 1
@@ -55,34 +56,61 @@ def simulate_random_streaming(csv_file, db_file, table_name, log_file,
                         batch_df[col] = pd.to_numeric(batch_df[col], errors='coerce')
 
                 # --- 插入数据并记录日志 ---
-                start = time.time()
+                # --- 写入前，记录开始时间和开始的 CPU 使用时间 ---
+                p = psutil.Process(os.getpid())
+                cpu_times_start = p.cpu_times()
+                wall_time_start = time.time()
+
                 try:
                     if not con.execute(
-                        f"SELECT * FROM information_schema.tables WHERE table_name='{table_name}'"
+                            f"SELECT * FROM information_schema.tables WHERE table_name='{table_name}'"
                     ).fetchall():
                         print(f"⚠️ 表 {table_name} 不存在，自动创建中...")
                         duckdb.from_df(all_data.sample(n=10), connection=con).create(table_name)
                         print(f"✅ 表已创建")
 
+                    # --- 写入数据 ---
                     duckdb.from_df(batch_df, connection=con).insert_into(table_name)
-                    end = time.time()
 
+                    # --- 写入后，记录结束时间和结束的 CPU 使用时间 ---
+                    wall_time_end = time.time()
+                    cpu_times_end = p.cpu_times()
+
+                    # --- 计算时间差 ---
+                    user_diff = cpu_times_end.user - cpu_times_start.user  # 用户态时间
+                    system_diff = cpu_times_end.system - cpu_times_start.system  # 内核态时间
+                    total_wall_time = wall_time_end - wall_time_start  # 总耗时（秒）
+
+                    # --- 获取逻辑核数 ---
+                    cpu_count = psutil.cpu_count(logical=True) or 1
+
+                    # --- 计算归一化 CPU 使用率 ---
+                    if total_wall_time > 0:
+                        raw_cpu_percent = 100 * (user_diff + system_diff) / total_wall_time
+                        normalized_cpu_percent = raw_cpu_percent / cpu_count
+                    else:
+                        normalized_cpu_percent = 0.0
+
+                    # --- 获取容器或宿主机系统指标 ---
                     metrics = get_system_metrics_docker()
+
+                    # --- 记录日志 ---
                     log_entry = {
                         'timestamp': datetime.now().isoformat(),
                         'status': 'SUCCESS',
                         'rows_ingested': batch_size,
-                        'time_taken_seconds': round(end - start, 5),
-                        'ingestion_rate_rows_per_sec': round(batch_size / max(end - start, 0.0001), 2),
+                        'time_taken_seconds': round(total_wall_time, 5),
+                        'ingestion_rate_rows_per_sec': round(batch_size / max(total_wall_time, 0.0001), 2),
+                        'cpu_percent': round(normalized_cpu_percent, 2),  # ⭐ 新增准确的 CPU 使用率
                         'system_metrics': {
-                            'cpu_percent': metrics['cpu_percent'],
                             'memory_percent': metrics['memory_percent'],
+                            'memory_used_gb': metrics['memory_used_gb'],
                             'disk_io_counters': metrics.get('disk_io_counters', None)
                         }
                     }
                     log_f.write(json.dumps(log_entry) + '\n')
                     log_f.flush()
-                    print(f"✅ 写入 {batch_size} 行成功，耗时 {end - start:.4f} 秒")
+                    print(f"✅ 写入 {batch_size} 行成功，耗时 {total_wall_time:.4f} 秒，CPU {normalized_cpu_percent:.2f}%")
                     total_written += batch_size
 
                 except Exception as e:

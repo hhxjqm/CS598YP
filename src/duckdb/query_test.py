@@ -1,0 +1,353 @@
+import duckdb
+import pandas as pd
+import random
+import time
+import json
+import argparse
+from datetime import datetime
+import os
+from src.ingestion_test import get_system_metrics, get_system_metrics_docker
+
+random.seed(22)
+
+# --- 多列 group by：按 payment_type 和 passenger_count 聚合 ---
+def groupby_payment_and_passenger(df):
+    """
+    按 payment_type 和 passenger_count 两列进行 group by 统计数量
+    """
+    return (
+        "SELECT payment_type, passenger_count, COUNT(*) "
+        "FROM {table} GROUP BY payment_type, passenger_count",
+        "multi_column_groupby"   # 类型统一改为 multi_column_groupby
+    )
+
+# --- 查询 top-k 上车地点 ---
+def random_topk_location(df):
+    """
+    统计 pulocationid 出现次数最多的前10个地点
+    """
+    return (
+        "SELECT pulocationid, COUNT(*) "
+        "FROM {table} GROUP BY pulocationid "
+        "ORDER BY COUNT(*) DESC LIMIT 10",
+        "aggregation_topk"   # 类型统一改为 topk_location
+    )
+
+# --- 筛选 trip_distance 和 total_amount 范围 ---
+def random_filter_range(df):
+    """
+    筛选 trip_distance 和 total_amount 同时大于一定阈值的数据
+    """
+    # 计算 trip_distance 和 total_amount 的 30%-90%分位数区间
+    d_min, d_max = df['trip_distance'].quantile([0.3, 0.9])
+    a_min, a_max = df['total_amount'].quantile([0.3, 0.9])
+
+    # 在区间内随机选择一个 trip_distance 和 total_amount 的最小值
+    d = round(random.uniform(d_min, d_max), 2)
+    a = round(random.uniform(a_min, a_max), 2)
+
+    # 生成 SQL 查询
+    return (
+        f"SELECT * FROM {{table}} WHERE trip_distance > {d} AND total_amount > {a}",
+        "filter_range"    # 类型统一改为 filter_range
+    )
+
+# --- 随机选择一列进行 group by ---
+def random_groupby(df):
+    """
+    在 payment_type 或 passenger_count 两列中随机选择一列做 group by
+    """
+    col = random.choice(['payment_type', 'passenger_count'])
+    return (
+        f"SELECT {col}, COUNT(*) FROM {{table}} GROUP BY {col}",
+        "single_column_groupby"  # 类型统一改为 single_column_groupby
+    )
+
+def window_row_number(df):
+    """
+    1. Basic Window Function: Row Number
+        场景
+            给每一条出租车订单打一个唯一行号，便于后续处理。
+    """
+    return (
+        "SELECT *, ROW_NUMBER() OVER () AS row_num FROM {table}",
+        "basic_window"
+    )
+
+def sorted_window(df):
+    """
+    2. Sorted Window Function: Row Number by Trip Distance
+        场景
+            根据行程距离排序，找到最长的行程记录。
+    """
+    return (
+        "SELECT *, ROW_NUMBER() OVER (ORDER BY trip_distance DESC) AS distance_rank FROM {table}",
+        "sorted_window"
+    )
+
+def quantiles_entire_dataset(df):
+    """
+    3. Quantiles over Entire Dataset
+        场景
+            计算所有乘客支付总金额的中位数、90%分位数，用来了解消费水平分布。
+    """
+    return (
+        "SELECT "
+        "quantile_cont(total_amount, 0.5) OVER () AS median_amount, "
+        "quantile_cont(total_amount, 0.9) OVER () AS p90_amount "
+        "FROM {table}",
+        "quantiles_entire_dataset"
+    )
+
+def partition_by_window(df):
+    """
+    4. Partition by Window Function: Row Number within Payment Type
+        场景
+            在每种支付方式（例如现金、信用卡）内部对订单排序，分析不同支付方式下的订单特点。
+    """
+    return (
+        "SELECT *, ROW_NUMBER() OVER (PARTITION BY payment_type ORDER BY trip_distance DESC) AS rank_within_payment "
+        "FROM {table}",
+        "partition_by_window"
+    )
+
+def lead_and_lag(df):
+    """
+    5. Lead and Lag Analysis
+        场景
+            比较每单前后的乘客数量变化，观察高峰期、低谷期特点。
+    """
+    return (
+        "SELECT passenger_count, "
+        "LEAD(passenger_count) OVER (ORDER BY tpep_pickup_datetime) AS next_passenger, "
+        "LAG(passenger_count) OVER (ORDER BY tpep_pickup_datetime) AS prev_passenger "
+        "FROM {table}",
+        "lead_and_lag"
+    )
+
+def moving_averages(df):
+    """
+    6. Moving Average over 3 Rows
+        场景
+            平滑处理连续3单的支付金额，分析乘客消费变化趋势
+    """
+    return (
+        "SELECT tpep_pickup_datetime, "
+        "AVG(total_amount) OVER (ORDER BY tpep_pickup_datetime ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS moving_avg_amount "
+        "FROM {table}",
+        "moving_averages"
+    )
+
+def rolling_sum(df):
+    """
+    7. Rolling Sum over 3 Rows
+        场景
+            计算连续3单的总支付金额，用来观察收入变化。
+    """
+    return (
+        "SELECT tpep_pickup_datetime, "
+        "SUM(total_amount) OVER (ORDER BY tpep_pickup_datetime ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS rolling_sum_amount "
+        "FROM {table}",
+        "rolling_sum"
+    )
+
+def range_between(df):
+    """
+    8. Cumulative Sum with Range Between
+        场景
+            计算从开始到当前单的累计收入，用于绘制司机的工作日总收入曲线。
+    """
+    return (
+        "SELECT tpep_pickup_datetime, "
+        "SUM(total_amount) OVER (ORDER BY tpep_pickup_datetime RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative_income "
+        "FROM {table}",
+        "range_between"
+    )
+
+def quantiles_partition_by(df):
+    """
+    9. Quantiles Partitioned by Payment Type
+        场景
+            计算每种支付方式下的中位支付金额，比较现金和信用卡乘客的消费习惯差异。
+    """
+    return (
+        "SELECT payment_type, "
+        "quantile_cont(total_amount, 0.5) OVER (PARTITION BY payment_type) AS median_amount_within_payment "
+        "FROM {table}",
+        "quantiles_partition_by"
+    )
+
+def multi_column_complex_aggregation(df):
+    """
+    🔥 复杂多列聚合查询
+    场景：
+        大量分组维度下，做多种复杂聚合，专门用于打爆CPU和内存
+    """
+    return (
+        "SELECT "
+        "passenger_count, "
+        "payment_type, "
+        "PULocationID, "
+        "DOLocationID, "
+        "EXTRACT(year FROM tpep_pickup_datetime) AS pickup_year, "
+        "EXTRACT(month FROM tpep_pickup_datetime) AS pickup_month, "
+        "COUNT(*) AS trip_count, "
+        "SUM(total_amount) AS total_revenue, "
+        "AVG(trip_distance) AS avg_distance, "
+        "MAX(tip_amount) AS max_tip, "
+        "MIN(fare_amount) AS min_fare "
+        "FROM {table} "
+        "GROUP BY "
+        "passenger_count, "
+        "payment_type, "
+        "PULocationID, "
+        "DOLocationID, "
+        "pickup_year, "
+        "pickup_month",
+        "multi_column_complex_aggregation"
+    )
+
+def generate_random_queries(df, table):
+    normal_query_generators = [
+        random_groupby,
+        random_topk_location,
+        random_filter_range,
+        groupby_payment_and_passenger
+    ]
+
+    heavy_query_generators = [
+        window_row_number,
+        sorted_window,
+        quantiles_entire_dataset,
+        partition_by_window,
+        lead_and_lag,
+        moving_averages,
+        rolling_sum,
+        range_between,
+        quantiles_partition_by,
+        multi_column_complex_aggregation
+    ]
+
+    queries = []
+    for i in range(10):  # 每10轮
+        # 先生成普通查询
+        for gen in normal_query_generators:
+            sql, qtype = gen(df)
+            queries.append({
+                'sql': sql.format(table=table),
+                'type': qtype
+            })
+
+        # 每隔一段时间，插入一个 heavy 查询
+        heavy_gen = random.choice(heavy_query_generators)
+        sql, qtype = heavy_gen(df)
+        queries.append({
+            'sql': sql.format(table=table),
+            'type': qtype
+        })
+
+    return queries
+
+def create_indexes_duckdb(con, table_name):
+    """
+    在DuckDB中建推荐索引
+    """
+    try:
+        con.execute(f"CREATE INDEX IF NOT EXISTS idx_passenger_count ON {table_name} (passenger_count);")
+        con.execute(f"CREATE INDEX IF NOT EXISTS idx_payment_type ON {table_name} (payment_type);")
+        con.execute(f"CREATE INDEX IF NOT EXISTS idx_trip_distance ON {table_name} (trip_distance);")
+        con.execute(f"CREATE INDEX IF NOT EXISTS idx_pulocationid ON {table_name} (pulocationid);")
+        con.execute(f"CREATE INDEX IF NOT EXISTS idx_total_amount ON {table_name} (total_amount);")
+        con.execute(f"CREATE INDEX IF NOT EXISTS idx_pickup_datetime ON {table_name} (tpep_pickup_datetime);")
+        print("✅ DuckDB索引创建完成")
+    except Exception as e:
+        print(f"⚠️ 创建DuckDB索引失败: {e}")
+
+
+# --- 执行查询 + 系统状态监控 ---
+import psutil
+import os
+
+def run_query(con, sql):
+    p = psutil.Process(os.getpid())
+    cpu_times_start = p.cpu_times()
+    wall_time_start = time.time()
+
+    result = con.execute(sql).fetchall()
+
+    wall_time_end = time.time()
+    cpu_times_end = p.cpu_times()
+
+    user_diff = cpu_times_end.user - cpu_times_start.user
+    system_diff = cpu_times_end.system - cpu_times_start.system
+    total_wall_time = wall_time_end - wall_time_start
+
+    # 获取逻辑CPU核数
+    cpu_count = psutil.cpu_count(logical=True) or 1
+
+    if total_wall_time > 0:
+        raw_cpu_percent = 100 * (user_diff + system_diff) / total_wall_time
+        normalized_cpu_percent = raw_cpu_percent / cpu_count  # ⭐ 除以核数！
+    else:
+        normalized_cpu_percent = 0.0
+
+    sys_metrics = get_system_metrics_docker()
+
+    return {
+        'row_count': len(result),
+        'time_taken_seconds': round(total_wall_time, 5),
+        'cpu_percent': round(normalized_cpu_percent, 2),   # ⭐ 注意这里
+        'memory_percent': sys_metrics.get('memory_percent', -1),
+        'memory_used_gb': sys_metrics.get('memory_used_gb', -1)
+    }
+
+
+
+# --- 主测试逻辑：循环执行查询，实时写入日志 ---
+def benchmark_queries(db_path, table_name, sample_csv, log_path, rounds, max_seconds=None):
+    df = pd.read_csv(sample_csv, nrows=10000)
+    con = duckdb.connect(db_path)
+    create_indexes_duckdb(con, table_name)
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    start_time = time.time()
+
+    with open(log_path, 'a', encoding='utf-8') as f:
+        for i in range(rounds):
+            if max_seconds and (time.time() - start_time) > max_seconds:
+                print(f"⏱️ 已达到最大运行时间 {max_seconds} 秒，停止测试")
+                break
+
+            print(f"\n🔁 第 {i+1} 轮查询")
+            for q in generate_random_queries(df, table_name):
+                print(f"➡️ 查询类型 [{q['type']}]: {q['sql'][:80]}...")
+                result = run_query(con, q['sql'])
+                result.update({
+                    'timestamp': datetime.now().isoformat(),
+                    'query': q['sql'],
+                    'query_type': q['type']
+                })
+                f.write(json.dumps(result) + '\n')
+                f.flush()
+
+    print(f"\n✅ 日志写入完成：{log_path}")
+
+# --- CLI 入口 ---
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="DuckDB 查询性能测试（含资源监控）")
+    parser.add_argument('--db', required=True, help='DuckDB 数据库路径')
+    parser.add_argument('--table', required=True, help='目标表名')
+    parser.add_argument('--sample', required=True, help='样本 CSV 文件路径')
+    parser.add_argument('--log', required=True, help='输出日志路径 (.jsonl)')
+    parser.add_argument('--rounds', type=int, default=2**31-1, help='最大查询轮数')
+    parser.add_argument('--max-seconds', type=int, default=None, help='最大运行时间（秒）')
+
+    args = parser.parse_args()
+
+    benchmark_queries(
+        db_path=args.db,
+        table_name=args.table,
+        sample_csv=args.sample,
+        log_path=args.log,
+        rounds=args.rounds,
+        max_seconds=args.max_seconds
+    )

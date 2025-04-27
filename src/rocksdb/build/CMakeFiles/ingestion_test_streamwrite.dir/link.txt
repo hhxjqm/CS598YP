@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/ingestion_test_streamwrite.dir/ingestion_test_streamwrite.cpp.o -o ingestion_test_streamwrite  /usr/lib/x86_64-linux-gnu/librocksdb.so -lpthread 

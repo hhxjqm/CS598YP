@@ -150,38 +150,38 @@ python /test/src/ingestion_plot_streamwrite.py \
 ```
 
 ```bash
-# 每个batch固定行数写入，写入间隔0.5秒
-python /test/src/ingestion_test_streamwrite.py \
+# 每个batch固定行数写入，写入间隔1秒
+python -m src.duckdb.ingestion_test_streamwrite \
   --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
-  --db /test/db/test_duckdb/test_streamwrite.duckdb \
+  --db /test/db/duckdb/streamwrite_fixed.duckdb \
   --table yellow_taxi_test_streamwrite \
-  --log /test/log/test_runs/streamwrite_fixed_1h_log.jsonl \
+  --log /test/log/duckdb/3/streamwrite_1h_fixed.jsonl \
   --max-seconds 3600 \
   --mode fixed_rows
 ```
 
-# Plot the result
-python /test/src/ingestion_plot_streamwrite.py \
-  --log /test/log/test_runs/streamwrite_fixed_1h_log.jsonl \
-  --out /test/plots/streamwrite_fixed_1h.png \
+```
+# 生成图表
+python /test/src/duckdb/ingestion_plot_streamwrite.py \
+  --log /test/log/duckdb/2/streamwrite_1h_fixed.jsonl \
+  --out /test/plots//duckdb/2/streamwrite_1h_fixed.png \
   --title "StreamWrite Ingestion - 1 Hour Test"
 ```
 
+```
 
 ### 2. Querying DuckDB
-```bash
-python /test/src/query_test.py \
+python -m src.duckdb.query_test \
   --db /test/db/taxi_data.duckdb \
   --table yellow_taxi_trips \
   --sample /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
-  --log /test/log/test_runs/query_1h_log.jsonl \
+  --log /test/log/duckdb/5/query_1h.jsonl \
   --max-seconds 3600
-```
 
 ```bash
-python /test/src/query_plot.py \
-  --log /test/log/test_runs/query_1h_log.jsonl \
-  --out /test/plots/query_1h_metrics.png \
+python -m src.duckdb.query_plot \
+  --log /test/log/duckdb/5/query_1h.jsonl \
+  --out /test/plots/duckdb/5/query_1h.png \
   --title "DuckDB Query Performance - 1 Hour Testing" \
   --width 15 \
   --height 8
@@ -189,8 +189,9 @@ python /test/src/query_plot.py \
 
 ## 3. query 和 write 同时执行。
 duckdb不能同时读取相同的数据库文件。所以必须对被测数据库做一个readonly备份。
-./scripts/mixed_test.sh
 
+```
+./scripts/mixed_test.sh
 
 python /test/src/query_plot.py \
   --log /test/log/test_runs/mixed_test_1h_log_query.jsonl \
@@ -198,20 +199,82 @@ python /test/src/query_plot.py \
   --title "DuckDB Query Performance - 1 Hour Testing" \
   --width 15 \
   --height 8
+```
+
+
 
 
 ## 4. sqlite3 跑相同的测试
-```bash
-python /test/src/sqlite/ingestion_test_streamwrite.py \
+https://github.com/duckdb/duckdb/discussions/13371
+```bash 
+# 1小时，每个batch 0.1 - 1 秒延迟， 每个batch固定插入10行
+python -m src.sqlite.ingestion_test_streamwrite \
   --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
-  --db /test/db/test_sqlite/test_streamwrite.sqlite3 \
+  --db /test/db/sqlite/1/test_streamwrite.sqlite3 \
   --table yellow_taxi_test_streamwrite \
-  --log /test/log/test_runs/sqlite3/streamwrite_random_1h_log.jsonl \
+  --log /test/log/sqlite/1/streamwrite_1h_fixed.jsonl \
   --max-seconds 3600 \
   --delay-min 0.1 \
   --delay-max 1.0
+  --mode fixed_rows
+  
+# 统计 y轴插入行数 x轴时间
+python -m src.sqlite.ingestion_plot_streamwrite \
+  --log /test/log/sqlite/1/streamwrite_1h_fixed.jsonl \
+  --out /test/plots/sqlite/1/streamwrite_1h_fixed.png \
+  --title "SQL StreamWrite Ingestion - 1 Hour Test"
 ```
 
+```bash
+python -m src.sqlite.query_test \
+  --db /test/db/taxi_data.sqlite \
+  --table yellow_taxi_trips \
+  --sample /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
+  --log /test/log/sqlite/5/query_1h.jsonl \
+  --max-seconds 3600
+
+```bash
+python -m src.duckdb.query_plot \
+  --log /test/log/duckdb/5/query_1h.jsonl \
+  --out /test/plots/duckdb/5/query_1h.png \
+  --title "DuckDB Query Performance - 1 Hour Testing" \
+  --width 15 \
+  --height 8
+```
+
+
+
+
+
+
+## 5. RocksDB
+
+```
+export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+/test/src/rocksdb/build/ingestion_test_streamwrite \
+  --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
+  --db /test/db/rocksdb/1/test_streamwrite.db \
+  --log /test/log/rocksdb/1/streamwrite_1h_fixed.jsonl \
+  --max-seconds 3600 \
+  --delay-min 0.1 \
+  --delay-max 1.0 \
+  --mode fixed_rows
+```
+
+```
+/test/src/rocksdb/build/query_test \
+  --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
+  --db /test/db/taxi_data_rocksdb \
+  --log /test/log/rocksdb/5/query_1h.jsonl \
+  --max-seconds 3600
+```
+
+
+
+```
+
+
+##
 
 # 📘 DuckDB Ingestion Benchmark with Resource Monitoring
 

@@ -70,8 +70,8 @@ def get_system_metrics_docker():
     metrics = {}
 
     try:
-        # CPU 使用率（psutil 读的是宿主机，容器限制需另补充）
-        metrics['cpu_percent'] = psutil.cpu_percent(interval=0.1)
+        # CPU 使用率（psutil 读的是宿主机，容器限制需另补充），直接用当前进程
+        metrics['cpu_percent'] = psutil.Process().cpu_percent(interval=0.00001)
 
         # 内存读取（优先 cgroup v2，再 fallback 到 v1）
         mem_limit = None
