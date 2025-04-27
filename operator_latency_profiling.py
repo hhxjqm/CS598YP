@@ -73,6 +73,11 @@ def parse_profiling_json(json_str):
     operator_timings = []
     total_query_time_ms = 0.0 # 从 profiling 数据中获取的总时间
 
+    # Handle empty input string
+    if not json_str:
+        print("Warning: parse_profiling_json received empty input.")
+        return [], 0.0
+
     try:
         profile_data = json.loads(json_str)
 
@@ -132,8 +137,7 @@ def profile_queries(db_path, queries, log_path, prof_mode):
     """连接数据库，运行查询，记录性能和操作符延迟"""
     print(f"开始分析查询，数据库: {db_path}")
     print(f"日志将记录到: {log_path}")
-    # 定义临时 profile 输出文件路径
-    profile_temp_file = '/tmp/duckdb_profile_temp.json' # 使用临时目录
+    profile_temp_file = './duckdb_profile_temp.json' # 使用当前目录
 
     try:
         # 连接到 DuckDB 数据库
@@ -143,7 +147,6 @@ def profile_queries(db_path, queries, log_path, prof_mode):
             # 启用 profiling 并指定输出文件
             try:
                 con.execute(f"PRAGMA enable_profiling='{prof_mode}';")
-                # 修改之处：指定 profile 输出文件路径
                 con.execute(f"PRAGMA profile_output='{profile_temp_file}';")
                 print(f"已启用 DuckDB profiling 模式: '{prof_mode}'")
                 print(f"Profiling 输出将写入: '{profile_temp_file}'")
@@ -176,56 +179,58 @@ def profile_queries(db_path, queries, log_path, prof_mode):
 
                     try:
                         # --- 执行查询并计时 ---
-                        start_time = time.perf_counter() # 使用 perf_counter 获取高精度时间
-
-                        # 执行查询并获取所有结果，以确保查询完全执行
+                        start_time = time.perf_counter()
                         result = con.execute(query).fetchall() # 执行目标查询
-
                         end_time = time.perf_counter()
                         total_time_taken_sec = end_time - start_time
 
+                        # Add a small delay to allow file writing
+                        time.sleep(0.1)
+
                         # --- 获取 profiling 数据 (修改之处) ---
-                        # 从 PRAGMA 指定的文件读取 profile 信息
-                        profiling_output = ""
+                        profiling_output_raw = "" # Store raw output here
+                        profiling_read_error = None
                         try:
-                            # 等待一小段时间确保文件写入完成 (可选，但有时有帮助)
-                            # time.sleep(0.05)
                             if os.path.exists(profile_temp_file):
                                 with open(profile_temp_file, 'r', encoding='utf-8') as pf:
-                                    profiling_output = pf.read()
-                                # print(f"原始 Profiling 输出:\n{profiling_output}\n") # 取消注释以查看
+                                    profiling_output_raw = pf.read()
+                                print(f"--- Debug: Raw profiling output read for query {i+1} ---")
+                                print(profiling_output_raw[:500] + ("..." if len(profiling_output_raw) > 500 else ""))
+                                print("--- End Debug ---")
                             else:
                                 print(f"Warning: Profile 文件 {profile_temp_file} 未找到。")
-                                log_entry['profiling_error'] = f"Profile file not found: {profile_temp_file}"
-
+                                profiling_read_error = f"Profile file not found: {profile_temp_file}"
                         except IOError as e:
                             print(f"读取 profile 文件时出错 {profile_temp_file}: {e}")
-                            log_entry['profiling_error'] = f"Error reading profile file: {e}"
+                            profiling_read_error = f"Error reading profile file: {e}"
 
+                        # --- 解析 profiling 数据 (REMOVED FOR NOW) ---
+                        # operator_details, profile_total_time_ms = parse_profiling_json(profiling_output_raw)
+                        # We will parse later based on the raw output logged
 
-                        # --- 解析 profiling 数据 ---
-                        operator_details, profile_total_time_ms = parse_profiling_json(profiling_output)
-
-                        # --- 记录结果 ---
+                        # --- 记录结果 (Modified) ---
                         log_entry.update({
                             'status': 'SUCCESS',
                             'total_time_seconds': round(total_time_taken_sec, 6),
-                            'profiling_total_time_ms': round(profile_total_time_ms, 4),
+                            # 'profiling_total_time_ms': round(profile_total_time_ms, 4), # Removed
+                            # 'operator_timings': operator_details, # Removed
                             'num_result_rows': len(result) if result else 0,
-                            'operator_timings': operator_details,
+                            'raw_profile_json': profiling_output_raw, # Log the raw string
+                            'profiling_error': profiling_read_error, # Log read error if any
                             'system_metrics_after': get_system_metrics()
                         })
                         print(f"  -> 查询成功完成。")
                         print(f"  -> 总耗时 (Python 측정): {total_time_taken_sec:.6f} 秒")
-                        if profile_total_time_ms > 0:
-                            print(f"  -> 总耗时 (Profile): {profile_total_time_ms:.4f} 毫秒")
+                        # if profile_total_time_ms > 0: # Removed
+                        #     print(f"  -> 总耗时 (Profile): {profile_total_time_ms:.4f} 毫秒")
                         print(f"  -> 返回行数: {log_entry['num_result_rows']}")
-                        print(f"  -> 操作符耗时详情:")
-                        for op in operator_details:
-                            if 'error' not in op:
-                                print(f"      - {op.get('operator_name', 'Unknown')}: {op.get('duration_ms', 'N/A')} ms {op.get('extra_info', '')}")
-                            else:
-                                print(f"      - 解析错误: {op.get('message', '')}")
+                        print(f"  -> Raw profile JSON logged (first 50 chars): {profiling_output_raw[:50]}") # Indicate raw data was logged
+                        # print(f"  -> 操作符耗时详情:") # Removed
+                        # for op in operator_details:
+                        #     if 'error' not in op:
+                        #         print(f"      - {op.get('operator_name', 'Unknown')}: {op.get('duration_ms', 'N/A')} ms {op.get('extra_info', '')}")
+                        #     else:
+                        #         print(f"      - 解析错误: {op.get('message', '')}")
 
                     except duckdb.Error as e:
                         print(f"  -> 执行查询时发生 DuckDB 错误: {e}")
