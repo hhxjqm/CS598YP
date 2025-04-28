@@ -239,10 +239,10 @@ int main() {
         if (s.ok()) {
             log_entry["status"] = "SUCCESS";
             // 打印进度和当前批次速率到控制台
-            std::cout << "处理块 " << chunk_index << " (" << rows_in_this_chunk << " 行)... 完成。"
-                      << " 耗时: " << std::fixed << std::setprecision(4) << time_taken_batch.count() << " 秒，速率: "
-                      << std::fixed << std::setprecision(2) << batch_rate << " 行/秒。" << std::endl;
-            std::cout << "  -> 累计插入: " << total_rows_processed + rows_in_this_chunk << " 行。" << std::endl;
+            // std::cout << "处理块 " << chunk_index << " (" << rows_in_this_chunk << " 行)... 完成。"
+                    //   << " 耗时: " << std::fixed << std::setprecision(4) << time_taken_batch.count() << " 秒，速率: "
+                    //   << std::fixed << std::setprecision(2) << batch_rate << " 行/秒。" << std::endl;
+            // std::cout << "  -> 累计插入: " << total_rows_processed + rows_in_this_chunk << " 行。" << std::endl;
         } else {
             log_entry["status"] = "ERROR";
             log_entry["error"] = s.ToString();
