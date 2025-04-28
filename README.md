@@ -132,20 +132,23 @@ python ingestion_plot.py
 
 ### 1. Stream Writing
 ```bash
+cd /test
+```
+```bash
 #单表，随机行数插入，有波动。
-python /test/src/ingestion_test_streamwrite.py \
+python -m src.duckdb.ingestion_test_streamwrite \
   --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
-  --db /test/db/test_duckdb/test_streamwrite.duckdb \
+  --db /test/db/duckdb/streamwrite_random.duckdb \
   --table yellow_taxi_test_streamwrite \
-  --log /test/log/test_runs/streamwrite_random_1h_log.jsonl \
-  --max-seconds 3600 \
+  --log /test/log/duckdb/6/streamwrite_10min_random.jsonl \
+  --max-seconds 600 \
   --delay-min 0.1 \
   --delay-max 1.0
 
 # 生成图表
-python /test/src/ingestion_plot_streamwrite.py \
-  --log /test/log/test_runs/streamwrite_random_1h_log.jsonl \
-  --out /test/plots/streamwrite_random_1h.png \
+python -m src.duckdb.ingestion_plot_streamwrite \
+  --log /test/log/duckdb/6/streamwrite_10min_random.jsonl \
+  --out /test/plots/duckdb/6/streamwrite_10min_random.png \
   --title "StreamWrite Ingestion - 1 Hour Test"
 ```
 
@@ -163,9 +166,9 @@ python -m src.duckdb.ingestion_test_streamwrite \
 ```
 # 生成图表
 python /test/src/duckdb/ingestion_plot_streamwrite.py \
-  --log /test/log/duckdb/2/streamwrite_1h_fixed.jsonl \
-  --out /test/plots//duckdb/2/streamwrite_1h_fixed.png \
-  --title "StreamWrite Ingestion - 1 Hour Test"
+  --log /test/log/duckdb/6/streamwrite_1h_fixed.jsonl \
+  --out /test/plots/duckdb/6/streamwrite_1h_fixed.png \
+  --title "DuckDB StreamWrite Ingestion - 1 Hour Test"
 ```
 
 ```
@@ -175,8 +178,8 @@ python -m src.duckdb.query_test \
   --db /test/db/taxi_data.duckdb \
   --table yellow_taxi_trips \
   --sample /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
-  --log /test/log/duckdb/5/query_1h.jsonl \
-  --max-seconds 3600
+  --log /test/log/duckdb/6/query_1h.jsonl \
+  --max-seconds 600
 
 ```bash
 python -m src.duckdb.query_plot \
@@ -243,31 +246,157 @@ python -m src.duckdb.query_plot \
 ```
 
 
-
-
-
-
 ## 5. RocksDB
 
 ```
+# 1. 固定行数
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 /test/src/rocksdb/build/ingestion_test_streamwrite \
   --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
-  --db /test/db/rocksdb/1/test_streamwrite.db \
-  --log /test/log/rocksdb/1/streamwrite_1h_fixed.jsonl \
-  --max-seconds 3600 \
+  --db /test/db/rocksdb/5/test_streamwrite.db \
+  --log /test/log/rocksdb/5/streamwrite_1h_fixed.jsonl \
+  --max-seconds 600 \
   --delay-min 0.1 \
   --delay-max 1.0 \
   --mode fixed_rows
 ```
+```
+python -m src.duckdb.ingestion_plot_streamwrite \
+  --log /test/log/rocksdb/6/streamwrite_1h_random.jsonl \
+  --out /test/plots/rocksdb/6/streamwrite_1h_random.png \
+  --title "RocksDB StreamWrite Ingestion - 1 Hour Test"
+```
+
+```bash
+# 2. 随机行数
+/test/src/rocksdb/build/ingestion_test_streamwrite \
+  --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
+  --db /test/db/rocksdb/6/test_streamwrite.db \
+  --log /test/log/rocksdb/6/streamwrite_1h_random.jsonl \
+  --max-seconds 600 \
+  --delay-min 0.1 \
+  --delay-max 1.0 \
+```
+```
+# 生成图表
+python /test/src/duckdb/ingestion_plot_streamwrite.py \
+  --log /test/log/rocksdb/6/streamwrite_1h_fixed.jsonl \
+  --out /test/plots/rocksdb/6/streamwrite_1h_fixed.png \
+  --title "RocksDB StreamWrite Ingestion - 1 Hour Test"
+```
+
 
 ```
+# 3. query test
 /test/src/rocksdb/build/query_test \
   --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
-  --db /test/db/taxi_data_rocksdb \
+  --db /test/db/rocksdb/taxi_data_rocksdb \
   --log /test/log/rocksdb/5/query_1h.jsonl \
-  --max-seconds 3600
+  --max-seconds 600
 ```
+```bash
+python -m src.rocksdb.query_plot \
+  --log /test/log/rocksdb/5/query_1h.jsonl \
+  --out /test/plots/rocksdb/5/query_1h.png \
+  --title "RocksDB Query Performance - 1 Hour Testing" \
+  --width 15 \
+  --height 8 \
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+### **3. 测试方法**
+
+#### **3.1 流式输入**
+
+日志格式：
+
+* Query：
+* Ingest:
+
+##### **3.1.1 随机读取**
+
+- 数据： 2023 NYC Taxi Data.csv
+- 读取一个小时
+- 每个批次时间： 0.1 - 1秒，随机
+- 每个批次数据量： 从csv中读取随机1 ～ 100行数据。csv中起始index随机
+- 每个批次数据插入到 streamwrite_random.duckdb 中的 yellow_taxi_test_streamwrite_表
+
+##### **3.1.2 固定读取**
+
+- 数据： 2023 NYC Taxi Data.csv
+- 读取一个小时
+- 每个批次时间： 1秒
+- 每个批次数据量： 从csv中读取10行数据。csv中起始index随机
+- 每个批次数据插入到 streamwrite_fixed.duckdb 中的 yellow_taxi_test_streamwrite表
+
+对于每种插入数据，统计：
+
+x: 长度为1小时的时间轴
+
+y：
+
+- 插入速度：插入的行数/插入耗时 
+- CPU %
+- Memory%
+- Disk Read
+- Disk Write
+
+#### **3.2 查询全表（单表）。**
+
+先前已经把csv中的所有行，插入到数据库中。
+
+根据实际业务场景。从csv中选择columns, 生成符合业务场景的sql。以下所有类型各对应一条sql。并且对这些类型，根据workload和可能返回数据的行数分为两类：normal_query和 heavy_query.
+
+其中
+
+**Normal Query包括**：
+
+**Heavy Query包括：**。
+
+对于Heavy Query中，一定会返回全表数据的查询有：
+
+对于这些一定会返回全表的查询。我们额外添加一个Limit查询，看下分页后的结果
+
+----
+
+执行的方法：
+
+* 数据：整个2023 NYC Taxi Data 数据库
+* 每个批次时间：取决于查询速度
+* 每个批次数据量（影响行数）：取决于查询语句
+* 每个批次查询语句：
+  * 一共10个。9个来自normal query（低wordload），1个来自heavy load。都随机抽取
+  * 
+
+https://tangdh.life/posts/database/duckdb-file/
+
+https://tangdh.life/posts/database/duckdb-file/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -313,3 +442,6 @@ python test1.py
 ```bash
 python plot.py
 ```
+
+
+

@@ -35,21 +35,18 @@ def random_topk_location(df):
 
 # --- 筛选 trip_distance 和 total_amount 范围 ---
 def random_filter_range(df):
-    """
-    筛选 trip_distance 和 total_amount 同时大于一定阈值的数据
-    """
-    # 计算 trip_distance 和 total_amount 的 30%-90%分位数区间
     d_min, d_max = df['trip_distance'].quantile([0.3, 0.9])
     a_min, a_max = df['total_amount'].quantile([0.3, 0.9])
 
-    # 在区间内随机选择一个 trip_distance 和 total_amount 的最小值
     d = round(random.uniform(d_min, d_max), 2)
     a = round(random.uniform(a_min, a_max), 2)
 
-    # 生成 SQL 查询
+    # ⭐ 关键：把两列都 CAST 成 DOUBLE
     return (
-        f"SELECT * FROM {{table}} WHERE trip_distance > {d} AND total_amount > {a}",
-        "filter_range"    # 类型统一改为 filter_range
+        f"SELECT * FROM {{table}} "
+        f"WHERE CAST(trip_distance AS DOUBLE) > {d} "
+        f"  AND CAST(total_amount  AS DOUBLE) > {a}",
+        "filter_range"
     )
 
 # --- 随机选择一列进行 group by ---
@@ -75,13 +72,10 @@ def window_row_number(df):
     )
 
 def sorted_window(df):
-    """
-    2. Sorted Window Function: Row Number by Trip Distance
-        场景
-            根据行程距离排序，找到最长的行程记录。
-    """
     return (
-        "SELECT *, ROW_NUMBER() OVER (ORDER BY trip_distance DESC) AS distance_rank FROM {table}",
+        "SELECT *, "
+        "ROW_NUMBER() OVER (ORDER BY CAST(trip_distance AS DOUBLE) DESC) AS distance_rank "
+        "FROM {table}",
         "sorted_window"
     )
 
@@ -93,8 +87,8 @@ def quantiles_entire_dataset(df):
     """
     return (
         "SELECT "
-        "quantile_cont(total_amount, 0.5) OVER () AS median_amount, "
-        "quantile_cont(total_amount, 0.9) OVER () AS p90_amount "
+        "quantile_cont(CAST(total_amount AS DOUBLE), 0.5) OVER () AS median_amount, "
+        "quantile_cont(CAST(total_amount AS DOUBLE), 0.9) OVER () AS p90_amount "
         "FROM {table}",
         "quantiles_entire_dataset"
     )
@@ -106,7 +100,9 @@ def partition_by_window(df):
             在每种支付方式（例如现金、信用卡）内部对订单排序，分析不同支付方式下的订单特点。
     """
     return (
-        "SELECT *, ROW_NUMBER() OVER (PARTITION BY payment_type ORDER BY trip_distance DESC) AS rank_within_payment "
+        "SELECT *, "
+        "ROW_NUMBER() OVER (PARTITION BY payment_type "
+        "ORDER BY CAST(trip_distance AS DOUBLE) DESC) AS rank_within_payment "
         "FROM {table}",
         "partition_by_window"
     )
@@ -133,7 +129,10 @@ def moving_averages(df):
     """
     return (
         "SELECT tpep_pickup_datetime, "
-        "AVG(total_amount) OVER (ORDER BY tpep_pickup_datetime ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS moving_avg_amount "
+        # ⭐ 把 total_amount 显式转 DOUBLE，避免 AVG(VARCHAR)
+        "AVG(CAST(total_amount AS DOUBLE)) "
+        "     OVER (ORDER BY tpep_pickup_datetime "
+        "           ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS moving_avg_amount "
         "FROM {table}",
         "moving_averages"
     )
@@ -146,7 +145,10 @@ def rolling_sum(df):
     """
     return (
         "SELECT tpep_pickup_datetime, "
-        "SUM(total_amount) OVER (ORDER BY tpep_pickup_datetime ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS rolling_sum_amount "
+        # ⭐ 同理：SUM 里 CAST
+        "SUM(CAST(total_amount AS DOUBLE)) "
+        "     OVER (ORDER BY tpep_pickup_datetime "
+        "           ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS rolling_sum_amount "
         "FROM {table}",
         "rolling_sum"
     )
@@ -159,7 +161,10 @@ def range_between(df):
     """
     return (
         "SELECT tpep_pickup_datetime, "
-        "SUM(total_amount) OVER (ORDER BY tpep_pickup_datetime RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative_income "
+        # ⭐ CAST，再也不会 sum(VARCHAR)
+        "SUM(CAST(total_amount AS DOUBLE)) "
+        "     OVER (ORDER BY tpep_pickup_datetime "
+        "           RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative_income "
         "FROM {table}",
         "range_between"
     )
@@ -172,7 +177,9 @@ def quantiles_partition_by(df):
     """
     return (
         "SELECT payment_type, "
-        "quantile_cont(total_amount, 0.5) OVER (PARTITION BY payment_type) AS median_amount_within_payment "
+        # ⭐ quantile_cont 也要数值列
+        "quantile_cont(CAST(total_amount AS DOUBLE), 0.5) "
+        "     OVER (PARTITION BY payment_type) AS median_amount_within_payment "
         "FROM {table}",
         "quantiles_partition_by"
     )
@@ -189,21 +196,16 @@ def multi_column_complex_aggregation(df):
         "payment_type, "
         "PULocationID, "
         "DOLocationID, "
-        "EXTRACT(year FROM tpep_pickup_datetime) AS pickup_year, "
-        "EXTRACT(month FROM tpep_pickup_datetime) AS pickup_month, "
-        "COUNT(*) AS trip_count, "
-        "SUM(total_amount) AS total_revenue, "
-        "AVG(trip_distance) AS avg_distance, "
-        "MAX(tip_amount) AS max_tip, "
-        "MIN(fare_amount) AS min_fare "
+        "EXTRACT(year  FROM tpep_pickup_datetime)  AS pickup_year, "
+        "EXTRACT(month FROM tpep_pickup_datetime)  AS pickup_month, "
+        "COUNT(*)                                    AS trip_count, "
+        "SUM(CAST(total_amount  AS DOUBLE))          AS total_revenue, "
+        "AVG(CAST(trip_distance AS DOUBLE))          AS avg_distance, "
+        "MAX(CAST(tip_amount    AS DOUBLE))          AS max_tip, "
+        "MIN(CAST(fare_amount   AS DOUBLE))          AS min_fare "
         "FROM {table} "
-        "GROUP BY "
-        "passenger_count, "
-        "payment_type, "
-        "PULocationID, "
-        "DOLocationID, "
-        "pickup_year, "
-        "pickup_month",
+        "GROUP BY passenger_count, payment_type, PULocationID, "
+        "         DOLocationID, pickup_year, pickup_month",
         "multi_column_complex_aggregation"
     )
 
