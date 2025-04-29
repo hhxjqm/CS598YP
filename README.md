@@ -209,8 +209,8 @@ python /test/src/duckdb/query_plot.py \
 # 生成图表
 python /test/src/duckdb/ingestion_plot_streamwrite.py \
   --log /test/log/duckdb/final/mixed_test_1h_log_ingest.jsonl  \
-  --out /test/plots/duckdb/6/streamwrite_1h_fixed.png \
-  --title "DuckDB StreamWrite Ingestion - 1 Hour Test"
+  --out /test/plots/duckdb/final/mixed_test_1h_log_ingest.png \
+  --title "DuckDB Hybrid Workload Performance - Ingestion - 1 Hour Testing"
 ```
 
 

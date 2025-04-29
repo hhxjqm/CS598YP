@@ -5,9 +5,9 @@
 
 # ---------- 配置 ----------
 CSV="/test/data_set/2023_Yellow_Taxi_Trip_Data.csv"
-DB_DIR="/test/db/test_rocksdb/6/test_streamwrite.db"   # ★ 唯一的 RocksDB 目录
-LOG_DIR="/test/log/rocksdb/6"                          # 日志目录
-MAX_SEC=600
+DB_DIR="/test/db/test_rocksdb/final/test_streamwrite"   # ★ 唯一的 RocksDB 目录
+LOG_DIR="/test/log/rocksdb/final"                          # 日志目录
+MAX_SEC=3600
 DELAY_MIN=0.1
 DELAY_MAX=1.0
 
@@ -21,7 +21,7 @@ mkdir -p "$LOG_DIR"  "$(dirname "$DB_DIR")"
 /test/src/rocksdb/build/ingestion_test_streamwrite \
   --csv "$CSV" \
   --db  "$DB_DIR" \
-  --log "$LOG_DIR/mix_edstreamwrite_${MAX_SEC}s_random.jsonl" \
+  --log "$LOG_DIR/mixed_streamwrite_${MAX_SEC}s_random.jsonl" \
   --max-seconds "$MAX_SEC" \
   --delay-min  "$DELAY_MIN" \
   --delay-max  "$DELAY_MAX" &

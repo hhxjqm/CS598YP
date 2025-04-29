@@ -65,6 +65,8 @@ CMAKE_BINARY_DIR = /test/src/rocksdb/build
 # The main recursive "all" target.
 all: CMakeFiles/query_test.dir/all
 all: CMakeFiles/ingestion_test_streamwrite.dir/all
+all: CMakeFiles/insert_all.dir/all
+all: CMakeFiles/get_version.dir/all
 .PHONY : all
 
 # The main recursive "preinstall" target.
@@ -74,6 +76,8 @@ preinstall:
 # The main recursive "clean" target.
 clean: CMakeFiles/query_test.dir/clean
 clean: CMakeFiles/ingestion_test_streamwrite.dir/clean
+clean: CMakeFiles/insert_all.dir/clean
+clean: CMakeFiles/get_version.dir/clean
 .PHONY : clean
 
 #=============================================================================
@@ -83,7 +87,7 @@ clean: CMakeFiles/ingestion_test_streamwrite.dir/clean
 CMakeFiles/query_test.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/query_test.dir/build.make CMakeFiles/query_test.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/query_test.dir/build.make CMakeFiles/query_test.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/test/src/rocksdb/build/CMakeFiles --progress-num=3,4 "Built target query_test"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/test/src/rocksdb/build/CMakeFiles --progress-num=7,8 "Built target query_test"
 .PHONY : CMakeFiles/query_test.dir/all
 
 # Build rule for subdir invocation for target.
@@ -109,7 +113,7 @@ CMakeFiles/query_test.dir/clean:
 CMakeFiles/ingestion_test_streamwrite.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ingestion_test_streamwrite.dir/build.make CMakeFiles/ingestion_test_streamwrite.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ingestion_test_streamwrite.dir/build.make CMakeFiles/ingestion_test_streamwrite.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/test/src/rocksdb/build/CMakeFiles --progress-num=1,2 "Built target ingestion_test_streamwrite"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/test/src/rocksdb/build/CMakeFiles --progress-num=3,4 "Built target ingestion_test_streamwrite"
 .PHONY : CMakeFiles/ingestion_test_streamwrite.dir/all
 
 # Build rule for subdir invocation for target.
@@ -127,6 +131,58 @@ ingestion_test_streamwrite: CMakeFiles/ingestion_test_streamwrite.dir/rule
 CMakeFiles/ingestion_test_streamwrite.dir/clean:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ingestion_test_streamwrite.dir/build.make CMakeFiles/ingestion_test_streamwrite.dir/clean
 .PHONY : CMakeFiles/ingestion_test_streamwrite.dir/clean
+
+#=============================================================================
+# Target rules for target CMakeFiles/insert_all.dir
+
+# All Build rule for target.
+CMakeFiles/insert_all.dir/all:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/insert_all.dir/build.make CMakeFiles/insert_all.dir/depend
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/insert_all.dir/build.make CMakeFiles/insert_all.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/test/src/rocksdb/build/CMakeFiles --progress-num=5,6 "Built target insert_all"
+.PHONY : CMakeFiles/insert_all.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/insert_all.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /test/src/rocksdb/build/CMakeFiles 2
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/insert_all.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /test/src/rocksdb/build/CMakeFiles 0
+.PHONY : CMakeFiles/insert_all.dir/rule
+
+# Convenience name for target.
+insert_all: CMakeFiles/insert_all.dir/rule
+.PHONY : insert_all
+
+# clean rule for target.
+CMakeFiles/insert_all.dir/clean:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/insert_all.dir/build.make CMakeFiles/insert_all.dir/clean
+.PHONY : CMakeFiles/insert_all.dir/clean
+
+#=============================================================================
+# Target rules for target CMakeFiles/get_version.dir
+
+# All Build rule for target.
+CMakeFiles/get_version.dir/all:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/get_version.dir/build.make CMakeFiles/get_version.dir/depend
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/get_version.dir/build.make CMakeFiles/get_version.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/test/src/rocksdb/build/CMakeFiles --progress-num=1,2 "Built target get_version"
+.PHONY : CMakeFiles/get_version.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/get_version.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /test/src/rocksdb/build/CMakeFiles 2
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/get_version.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /test/src/rocksdb/build/CMakeFiles 0
+.PHONY : CMakeFiles/get_version.dir/rule
+
+# Convenience name for target.
+get_version: CMakeFiles/get_version.dir/rule
+.PHONY : get_version
+
+# clean rule for target.
+CMakeFiles/get_version.dir/clean:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/get_version.dir/build.make CMakeFiles/get_version.dir/clean
+.PHONY : CMakeFiles/get_version.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.

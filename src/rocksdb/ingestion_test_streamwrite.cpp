@@ -8,7 +8,7 @@
 #include <filesystem>
 #include <string>
 #include <iomanip>
-#include <json.hpp> // 用 nlohmann/json 来处理 JSON
+#include <json.hpp>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <rocksdb/write_batch.h>
@@ -16,9 +16,91 @@
 #include <sys/stat.h>
 #include <sys/statvfs.h> // ⭐ 补上这个
 #include <unistd.h>
+#include <cstdlib>
+#include <ctime>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
+static std::mt19937 rng(22);
+
+
+// 在 load_csv 之后，get_system_metrics_docker 之前，插入这个函数：
+/**
+ * 对单条 JSON 数据进行随机扰动 (perturbation)：
+ * - trip_distance ±20%
+ * - total_amount ±5
+ * - passenger_count 随机 1–4
+ * - tip_amount 随机 0–5
+ * - tpep_pickup_datetime +1~30 分钟
+ * - tpep_dropoff_datetime +5~20 分钟
+ */
+void perturb_row(json &row) {
+    // 1. trip_distance ±20%
+    if (row.contains("trip_distance")) {
+        try {
+            double d = std::stod(row["trip_distance"].get<std::string>());
+            std::uniform_real_distribution<> fd(0.8, 1.2);
+            d = std::round(d * fd(rng) * 100.0) / 100.0;
+            row["trip_distance"] = std::to_string(d);
+        } catch(...) {}
+    }
+    // 2. total_amount ±5
+    if (row.contains("total_amount")) {
+        try {
+            double a = std::stod(row["total_amount"].get<std::string>());
+            std::uniform_real_distribution<> fa(-5.0, 5.0);
+            a = std::round((a + fa(rng)) * 100.0) / 100.0;
+            row["total_amount"] = std::to_string(a);
+        } catch(...) {}
+    }
+    // 3. passenger_count 随机 1–4
+    if (row.contains("passenger_count")) {
+        std::uniform_int_distribution<> ip(1, 4);
+        row["passenger_count"] = std::to_string(ip(rng));
+    }
+    // 4. tip_amount 随机 0–5
+    if (row.contains("tip_amount")) {
+        std::uniform_real_distribution<> ft(0.0, 5.0);
+        double t = std::round(ft(rng)*100.0)/100.0;
+        row["tip_amount"] = std::to_string(t);
+    }
+    // 准备时间偏移
+    auto parse_dt = [&](const std::string &s)->std::chrono::system_clock::time_point {
+        std::tm tm{}; std::istringstream ss(s);
+        ss >> std::get_time(&tm, "%m/%d/%Y %I:%M:%S %p");
+        return std::chrono::system_clock::from_time_t(std::mktime(&tm));
+    };
+    auto format_dt = [&](const std::chrono::system_clock::time_point &tp)->std::string {
+        auto tt = std::chrono::system_clock::to_time_t(tp);
+        auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+                      tp.time_since_epoch()) % 1000000;
+        std::ostringstream os;
+        os << std::put_time(std::gmtime(&tt), "%m/%d/%Y %I:%M:%S %p")
+           << '.' << std::setw(3) << std::setfill('0')
+           << (us.count()/1000);
+        return os.str();
+    };
+    // 5. tpep_pickup_datetime +1~30 分钟
+    if (row.contains("tpep_pickup_datetime")) {
+        try {
+            auto tp = parse_dt(row["tpep_pickup_datetime"].get<std::string>());
+            std::uniform_int_distribution<> fm(1,30);
+            tp += std::chrono::minutes(fm(rng));
+            row["tpep_pickup_datetime"] = format_dt(tp);
+        } catch(...) {}
+    }
+    // 6. tpep_dropoff_datetime +5~20 分钟
+    if (row.contains("tpep_dropoff_datetime")) {
+        try {
+            auto tp = parse_dt(row["tpep_dropoff_datetime"].get<std::string>());
+            std::uniform_int_distribution<> fm(5,20);
+            tp += std::chrono::minutes(fm(rng));
+            row["tpep_dropoff_datetime"] = format_dt(tp);
+        } catch(...) {}
+    }
+}
+
+
 
 // --- 获取当前时间戳字符串，带微秒 ---
 std::string get_current_timestamp() {
@@ -215,10 +297,21 @@ void simulate_random_streaming(const std::string& csv_file,
         json metrics_before = get_system_metrics_docker(); // 记录写入前资源使用
 
         try {
+            //记的恢复
+//            for (size_t i = 0; i < batch_size; ++i) {
+//                size_t idx = rand_index(gen);
+//                auto& row = all_data[idx];
+//                std::string key = get_current_timestamp() + "_" + std::to_string(i);
+//                std::string value = row.dump();
+//                batch.Put(key, value);
+//            }
             for (size_t i = 0; i < batch_size; ++i) {
                 size_t idx = rand_index(gen);
-                auto& row = all_data[idx];
-                std::string key = get_current_timestamp() + "_" + std::to_string(i);
+                // 复制一份样本行，并做随机扰动
+                json row = all_data[idx];
+                perturb_row(row);
+                // 生成唯一 key 和序列化后的 value
+                std::string key   = get_current_timestamp() + "_" + std::to_string(i);
                 std::string value = row.dump();
                 batch.Put(key, value);
             }

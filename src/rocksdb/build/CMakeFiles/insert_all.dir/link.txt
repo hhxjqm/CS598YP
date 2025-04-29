@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/insert_all.dir/insert_all.cpp.o -o insert_all  /usr/lib/x86_64-linux-gnu/librocksdb.so -lpthread 

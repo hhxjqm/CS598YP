@@ -45,4 +45,6 @@ set(CMAKE_MAKEFILE_PRODUCTS
 set(CMAKE_DEPEND_INFO_FILES
   "CMakeFiles/query_test.dir/DependInfo.cmake"
   "CMakeFiles/ingestion_test_streamwrite.dir/DependInfo.cmake"
+  "CMakeFiles/insert_all.dir/DependInfo.cmake"
+  "CMakeFiles/get_version.dir/DependInfo.cmake"
   )

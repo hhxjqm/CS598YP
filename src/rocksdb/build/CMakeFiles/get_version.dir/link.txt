@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/get_version.dir/get_version.cpp.o -o get_version  /usr/lib/x86_64-linux-gnu/librocksdb.so -lpthread 

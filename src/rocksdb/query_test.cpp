@@ -32,7 +32,6 @@ static constexpr int   NORMAL_PER_GRP = 4;          // 每组 4 个普通查询
 
 // ---------- 随机数固定种子，保证可复现 ----------
 static std::mt19937 rng(22);
-
 // ==================================================================
 // 🛠️ 1. 通用工具
 // ==================================================================
@@ -188,6 +187,118 @@ size_t filter_range(const std::vector<json>& d)
     }
     return cnt;
 }
+
+// ------ 3.x Point Lookup ------
+size_t point_lookup(const std::vector<json>& d) {
+    // 随机选一个 PULocationID
+    std::vector<int> ids;
+    for (auto& r : d) {
+        if (r.contains("PULocationID") && r["PULocationID"].is_number_integer()) {
+            ids.push_back(r["PULocationID"].get<int>());
+        }
+    }
+    if (ids.empty()) return 0;
+    std::uniform_int_distribution<size_t> dist_id(0, ids.size() - 1);
+    int target = ids[dist_id(rng)];
+
+    // 扫描并限定最多 5 条
+    size_t cnt = 0;
+    for (auto& r : d) {
+        if (r.contains("PULocationID") && r["PULocationID"].is_number_integer()
+            && r["PULocationID"].get<int>() == target) {
+            if (++cnt >= 5) break;
+        }
+    }
+    return cnt;
+}
+
+// ------ 3.x Datetime Range ------
+size_t datetime_range(const std::vector<json>& d) {
+    // 收集所有 pickup datetime 字符串
+    std::vector<std::string> times;
+    for (auto& r : d) {
+        if (r.contains("tpep_pickup_datetime") && r["tpep_pickup_datetime"].is_string()) {
+            times.push_back(r["tpep_pickup_datetime"].get<std::string>());
+        }
+    }
+    if (times.empty()) return 0;
+    // 随机挑一个作起点
+    std::uniform_int_distribution<size_t> dist_t(0, times.size() - 1);
+    std::string s = times[dist_t(rng)];
+
+    // 解析成 tm
+    std::tm tm0{};
+    std::istringstream iss(s);
+    iss >> std::get_time(&tm0, "%m/%d/%Y %I:%M:%S %p");
+    auto t0 = std::chrono::system_clock::from_time_t(std::mktime(&tm0));
+    auto t1 = t0 + std::chrono::hours(1);
+
+    // 扫描并限定最多 10 条
+    size_t cnt = 0;
+    for (auto& r : d) {
+        if (!r.contains("tpep_pickup_datetime") || !r["tpep_pickup_datetime"].is_string()) continue;
+        std::string s2 = r["tpep_pickup_datetime"].get<std::string>();
+        std::tm tm2{};
+        std::istringstream iss2(s2);
+        iss2 >> std::get_time(&tm2, "%m/%d/%Y %I:%M:%S %p");
+        auto t2 = std::chrono::system_clock::from_time_t(std::mktime(&tm2));
+        if (t2 >= t0 && t2 <= t1) {
+            if (++cnt >= 10) break;
+        }
+    }
+    return cnt;
+}
+
+// ------ 3.x Multi-column Filter ------
+size_t multi_column_filter(const std::vector<json>& d) {
+    // 随机选 PULocationID / DOLocationID / passenger_count
+    std::vector<int> locs, dolocs, paxs;
+    for (auto& r : d) {
+        if (r.contains("PULocationID") && r["PULocationID"].is_number_integer())
+            locs.push_back(r["PULocationID"].get<int>());
+        if (r.contains("DOLocationID") && r["DOLocationID"].is_number_integer())
+            dolocs.push_back(r["DOLocationID"].get<int>());
+        if (r.contains("passenger_count") && r["passenger_count"].is_number_integer())
+            paxs.push_back(r["passenger_count"].get<int>());
+    }
+    if (locs.empty() || dolocs.empty() || paxs.empty()) return 0;
+    int loc   = locs[std::uniform_int_distribution<size_t>(0,locs.size()-1)(rng)];
+    int doloc = dolocs[std::uniform_int_distribution<size_t>(0,dolocs.size()-1)(rng)];
+    int pax   = paxs[std::uniform_int_distribution<size_t>(0,paxs.size()-1)(rng)];
+
+    // 扫描并限定最多 10 条
+    size_t cnt = 0;
+    for (auto& r : d) {
+        if (!r.contains("PULocationID") || !r.contains("DOLocationID") || !r.contains("passenger_count"))
+            continue;
+        try {
+            if (r["PULocationID"].get<int>() == loc
+             && r["DOLocationID"].get<int>() == doloc
+             && r["passenger_count"].get<int>() == pax) {
+                if (++cnt >= 10) break;
+            }
+        } catch(...) {}
+    }
+    return cnt;
+}
+
+// ------ 3.x Nonzero Tip GroupBy ------
+size_t nonzero_tip_groupby(const std::vector<json>& d) {
+    std::unordered_set<std::string> vendors;
+    for (auto& r : d) {
+        if (r.contains("tip_amount") && r.contains("VendorID")) {
+            try {
+                double tip = std::stod(r["tip_amount"].get<std::string>());
+                if (tip > 0) {
+                    vendors.insert(r["VendorID"].get<std::string>());
+                }
+            } catch(...) {}
+        }
+    }
+    return vendors.size();
+}
+
+
 // ------ 3.5 以下 heavy 查询直接返回行数，逻辑保持不变 ------
 size_t basic_window                (const std::vector<json>& d){ return d.size(); }
 size_t sorted_window               (const std::vector<json>& d){ return d.size(); }
@@ -226,7 +337,36 @@ static std::vector<QueryDef> NORMAL_QUERIES = {
     {"filter_range",
      "SELECT * FROM " TABLE_NAME
      " WHERE trip_distance > ? AND total_amount > ?",
-     filter_range}
+     filter_range},
+
+    // 记的测普通的时候注视下面的.
+
+    // 新增：point_lookup
+    { "point_lookup",
+      // SQL 模板只是为了记录，用不上真正执行
+      "SELECT * FROM " TABLE_NAME " WHERE PULocationID = ? LIMIT 5",
+      point_lookup },
+
+    // 新增：datetime_range
+    { "datetime_range",
+      "SELECT VendorID, trip_distance, total_amount "
+      "FROM " TABLE_NAME " "
+      "WHERE CAST(tpep_pickup_datetime AS TIMESTAMP) BETWEEN ? AND ? "
+      "ORDER BY total_amount DESC LIMIT 10",
+      datetime_range },
+
+    // 新增：multi_column_filter
+    { "multi_column_filter",
+      "SELECT trip_distance, fare_amount, tip_amount "
+      "FROM " TABLE_NAME " "
+      "WHERE PULocationID = ? AND DOLocationID = ? AND passenger_count = ? LIMIT 10",
+      multi_column_filter },
+
+    // 新增：nonzero_tip_groupby
+    { "nonzero_tip_groupby",
+      "SELECT VendorID, AVG(tip_amount) FROM " TABLE_NAME " WHERE tip_amount > 0 GROUP BY VendorID",
+      nonzero_tip_groupby
+      }
 };
 
 // ================= 重载 / Window / 复杂聚合查询 =================
@@ -345,8 +485,9 @@ json run_query(const QueryDef& qd, const std::vector<json>& data)
 }
 
 // ==================================================================
-// 🔄 6. 主基准循环：每轮 10 组 * (4 普通 + 1 重载) 共 50 次
+// 🔄 6. 主基准循环：每轮 10 组 * (random 普通 + 1 重载) 共 50 次
 // ==================================================================
+
 void benchmark(const std::vector<json>& data,
                const std::string&        log_path,
                int                       rounds,
@@ -354,7 +495,9 @@ void benchmark(const std::vector<json>& data,
 {
     std::ofstream flog(log_path, std::ios::app);
     auto t_start = std::chrono::steady_clock::now();
-
+    // 👉 新增：打乱 normal query 顺序
+    std::vector<int> normal_indices(NORMAL_QUERIES.size());
+    std::iota(normal_indices.begin(), normal_indices.end(), 0);
     std::uniform_int_distribution<> heavy_dist(0, (int)HEAVY_QUERIES.size()-1);
 
     for (int rd = 0; rd < rounds; ++rd) {
@@ -370,8 +513,9 @@ void benchmark(const std::vector<json>& data,
 
         std::cout << "\n🔁 第 " << rd+1 << " 轮查询\n";
         for (int grp=0; grp<OUTER_LOOPS; ++grp){
-            // ---- 4 个普通查询固定顺序 ----
-            for (auto& qd: NORMAL_QUERIES){
+            std::shuffle(normal_indices.begin(), normal_indices.end(), rng);
+            for (int i = 0; i < std::min(5, (int)normal_indices.size()); ++i) {
+                auto& qd = NORMAL_QUERIES[normal_indices[i]];
                 std::cout << "➡️ [" << qd.type << "]\n";
                 auto res = run_query(qd, data);
                 flog << res.dump() << '\n';  flog.flush();

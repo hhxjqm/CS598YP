@@ -1,4 +1,6 @@
 /test/src/rocksdb/build/CMakeFiles/query_test.dir
 /test/src/rocksdb/build/CMakeFiles/ingestion_test_streamwrite.dir
+/test/src/rocksdb/build/CMakeFiles/insert_all.dir
+/test/src/rocksdb/build/CMakeFiles/get_version.dir
 /test/src/rocksdb/build/CMakeFiles/edit_cache.dir
 /test/src/rocksdb/build/CMakeFiles/rebuild_cache.dir

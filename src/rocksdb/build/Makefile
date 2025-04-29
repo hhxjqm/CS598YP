@@ -142,6 +142,56 @@ ingestion_test_streamwrite/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ingestion_test_streamwrite.dir/build.make CMakeFiles/ingestion_test_streamwrite.dir/build
 .PHONY : ingestion_test_streamwrite/fast
 
+#=============================================================================
+# Target rules for targets named insert_all
+
+# Build rule for target.
+insert_all: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 insert_all
+.PHONY : insert_all
+
+# fast build rule for target.
+insert_all/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/insert_all.dir/build.make CMakeFiles/insert_all.dir/build
+.PHONY : insert_all/fast
+
+#=============================================================================
+# Target rules for targets named get_version
+
+# Build rule for target.
+get_version: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 get_version
+.PHONY : get_version
+
+# fast build rule for target.
+get_version/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/get_version.dir/build.make CMakeFiles/get_version.dir/build
+.PHONY : get_version/fast
+
+get_version.o: get_version.cpp.o
+.PHONY : get_version.o
+
+# target to build an object file
+get_version.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/get_version.dir/build.make CMakeFiles/get_version.dir/get_version.cpp.o
+.PHONY : get_version.cpp.o
+
+get_version.i: get_version.cpp.i
+.PHONY : get_version.i
+
+# target to preprocess a source file
+get_version.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/get_version.dir/build.make CMakeFiles/get_version.dir/get_version.cpp.i
+.PHONY : get_version.cpp.i
+
+get_version.s: get_version.cpp.s
+.PHONY : get_version.s
+
+# target to generate assembly for a file
+get_version.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/get_version.dir/build.make CMakeFiles/get_version.dir/get_version.cpp.s
+.PHONY : get_version.cpp.s
+
 ingestion_test_streamwrite.o: ingestion_test_streamwrite.cpp.o
 .PHONY : ingestion_test_streamwrite.o
 
@@ -165,6 +215,30 @@ ingestion_test_streamwrite.s: ingestion_test_streamwrite.cpp.s
 ingestion_test_streamwrite.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ingestion_test_streamwrite.dir/build.make CMakeFiles/ingestion_test_streamwrite.dir/ingestion_test_streamwrite.cpp.s
 .PHONY : ingestion_test_streamwrite.cpp.s
+
+insert_all.o: insert_all.cpp.o
+.PHONY : insert_all.o
+
+# target to build an object file
+insert_all.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/insert_all.dir/build.make CMakeFiles/insert_all.dir/insert_all.cpp.o
+.PHONY : insert_all.cpp.o
+
+insert_all.i: insert_all.cpp.i
+.PHONY : insert_all.i
+
+# target to preprocess a source file
+insert_all.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/insert_all.dir/build.make CMakeFiles/insert_all.dir/insert_all.cpp.i
+.PHONY : insert_all.cpp.i
+
+insert_all.s: insert_all.cpp.s
+.PHONY : insert_all.s
+
+# target to generate assembly for a file
+insert_all.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/insert_all.dir/build.make CMakeFiles/insert_all.dir/insert_all.cpp.s
+.PHONY : insert_all.cpp.s
 
 query_test.o: query_test.cpp.o
 .PHONY : query_test.o
@@ -198,11 +272,19 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... get_version"
 	@echo "... ingestion_test_streamwrite"
+	@echo "... insert_all"
 	@echo "... query_test"
+	@echo "... get_version.o"
+	@echo "... get_version.i"
+	@echo "... get_version.s"
 	@echo "... ingestion_test_streamwrite.o"
 	@echo "... ingestion_test_streamwrite.i"
 	@echo "... ingestion_test_streamwrite.s"
+	@echo "... insert_all.o"
+	@echo "... insert_all.i"
+	@echo "... insert_all.s"
 	@echo "... query_test.o"
 	@echo "... query_test.i"
 	@echo "... query_test.s"
