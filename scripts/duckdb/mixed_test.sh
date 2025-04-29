@@ -1,62 +1,64 @@
-#!/usr/bin/env bash
-# ===========================================================
-# scripts/duckdb/mixed_test.sh  —— 修正版
-# ===========================================================
+#!/bin/bash
+
+# Ctrl+C 时杀掉所有子进程（包括同步进程）
 trap 'echo "中断，杀掉所有子进程"; kill 0' SIGINT
 
-CSV=/test/data_set/2023_Yellow_Taxi_Trip_Data.csv
-DB_PATH=/test/db/test_duckdb/test_streamwrite.duckdb
-DB_READONLY=/test/db/test_duckdb/test_streamwrite_readonly.duckdb
-LOG_DIR=/test/log/duckdb/6
-TABLE=yellow_taxi_test_streamwrite
-MAX_SEC=600
+# 确保最终目录存在
+mkdir -p /test/db/duckdb/final
 
-mkdir -p "$LOG_DIR" "$(dirname "$DB_PATH")"
+# 定义源库（DB_PATH）和只读副本（DB_READONLY_PATH）
+DB_PATH="/test/db/duckdb/final/taxi_data.duckdb"
+DB_READONLY_PATH="/test/db/duckdb/final/taxi_data_readonly.duckdb"
 
-# ---------- 1. 启动 ingestion（写库） ----------
-python -m src.duckdb.ingestion_test_streamwrite \
-  --csv "$CSV" \
-  --db  "$DB_PATH" \
-  --table "$TABLE" \
-  --log "$LOG_DIR/mixed_streamwrite_${MAX_SEC}s_random.jsonl" \
-  --max-seconds "$MAX_SEC" \
-  --delay-min 0.1 --delay-max 1.0 &
-INGEST_PID=$!
-echo "ingestion PID: $INGEST_PID"
+# —— 后台启动同步进程（sync process）：等源库文件生成，再首次复制，并每秒更新一次 ——
+(
+  # 等待源库文件被写入磁盘
+  until [ -f "$DB_PATH" ]; do
+    echo "⏳ 等待源库文件 (DB_PATH): $DB_PATH"
+    sleep 1
+  done
 
-# ---------- 2. 等数据库文件生成 ----------
-echo -n "等待数据库文件生成..."
-while [ ! -f "$DB_PATH" ]; do sleep 0.2; done
-echo " OK"
+  # 第一次复制，确保目标有内容
+  cp "$DB_PATH" "$DB_READONLY_PATH"
+  echo "✅ 首次复制完成：$DB_READONLY_PATH"
 
-# ---------- 3. 等目标表真正创建 ----------
-echo -n "等待表 $TABLE 创建..."
-until duckdb "$DB_PATH" -c "SELECT 1 FROM information_schema.tables WHERE table_name='$TABLE' LIMIT 1;" \
-       >/dev/null 2>&1; do
-  sleep 0.2
-done
-echo " OK"
-
-# ---------- 4. 后台同步副本 ----------
-while true; do
-  cp "$DB_PATH" "$DB_READONLY"
-  sleep 1
-done &
+  # 持续循环，每秒同步最新内容
+  while true; do
+    cp "$DB_PATH" "$DB_READONLY_PATH"
+    sleep 1
+  done
+) &
 SYNC_PID=$!
 echo "同步进程 PID: $SYNC_PID"
 
-# ---------- 5. 启动 query（读只读副本） ----------
+# —— 先启动查询脚本（query script），它内部会轮询等待表存在 ——
 python -m src.duckdb.query_test \
-  --db  "$DB_READONLY" \
-  --table "$TABLE" \
-  --sample "$CSV" \
-  --log "$LOG_DIR/mixed_query_${MAX_SEC}s.jsonl" \
-  --max-seconds "$MAX_SEC" &
+  --db "$DB_READONLY_PATH" \
+  --table yellow_taxi_trips \
+  --sample /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
+  --log /test/log/duckdb/final/mixed_test_1h_log_query.jsonl \
+  --max-seconds 3600 &
 QUERY_PID=$!
-echo "query PID: $QUERY_PID"
+echo "查询进程 PID: $QUERY_PID"
 
-# ---------- 6. 等两主进程结束 ----------
-wait "$INGEST_PID" "$QUERY_PID"
+# 等几秒，确保查询脚本已经在执行等待逻辑中了
+sleep 5
 
+# —— 然后再启动写入脚本（ingestion script），开始向源库写入数据 ——
+python -m src.duckdb.ingestion_test_streamwrite \
+  --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
+  --db "$DB_PATH" \
+  --table yellow_taxi_trips \
+  --log /test/log/duckdb/final/mixed_test_1h_log_ingest.jsonl \
+  --max-seconds 3600 \
+  --delay-min 0.1 \
+  --delay-max 1.0 &
+INGEST_PID=$!
+echo "写入进程 PID: $INGEST_PID"
+
+# 等待写入和查询两个主进程都结束
+wait $INGEST_PID $QUERY_PID
+
+# 停掉同步进程
 kill "$SYNC_PID"
 echo "测试结束，已停止数据库同步"

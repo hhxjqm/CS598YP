@@ -100,7 +100,7 @@ std::vector<json> load_all_from_rocks(const std::string& db_path)
 {
     rocksdb::DB* db;
     rocksdb::Options opt;
-    opt.create_if_missing = false;
+    opt.create_if_missing = true;
     auto s = rocksdb::DB::Open(opt, db_path, &db);
     if (!s.ok()) throw std::runtime_error("无法打开 RocksDB: " + s.ToString());
 

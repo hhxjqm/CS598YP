@@ -209,12 +209,77 @@ def multi_column_complex_aggregation(df):
         "multi_column_complex_aggregation"
     )
 
+def random_point_lookup(df):
+    """
+    模拟点查：随机选择一个 PULocationID 查找对应记录
+    """
+    loc_id = random.choice(df['PULocationID'].dropna().unique().tolist())
+    return (
+        f"SELECT * FROM {{table}} WHERE PULocationID = {loc_id} LIMIT 5",
+        "point_lookup"
+    )
+
+def random_datetime_range(df):
+    """
+    随机选择一个时间范围，模拟用户查某一小时的记录
+    """
+    times = pd.to_datetime(df['tpep_pickup_datetime'].dropna(), errors='coerce')
+    times = times.dropna()
+    if times.empty:
+        return (
+            f"SELECT * FROM {{table}} WHERE passenger_count = 1 LIMIT 10",
+            "fallback_datetime_range"
+        )
+    start = random.choice(times)
+    end = start + pd.Timedelta(hours=1)
+    return (
+        f"SELECT VendorID, trip_distance, total_amount "
+        f"FROM {{table}} "
+        f"WHERE CAST(tpep_pickup_datetime AS TIMESTAMP) BETWEEN '{start}' AND '{end}' "
+        f"ORDER BY total_amount DESC LIMIT 10",
+        "datetime_range"
+    )
+
+
+def random_multi_column_filter(df):
+    """
+    多列联合过滤：查特定上下车点和乘客数
+    """
+    loc_id = random.choice(df['PULocationID'].dropna().unique().tolist())
+    doloc_id = random.choice(df['DOLocationID'].dropna().unique().tolist())
+    pax = random.choice(df['passenger_count'].dropna().unique().tolist())
+    return (
+        f"SELECT trip_distance, fare_amount, tip_amount "
+        f"FROM {{table}} "
+        f"WHERE PULocationID = {loc_id} AND DOLocationID = {doloc_id} "
+        f"AND passenger_count = {pax} LIMIT 10",
+        "multi_column_filter"
+    )
+
+def tip_amount_above_zero(df):
+    """
+    分析有小费的订单：按 VendorID 分组计算平均 tip
+    """
+    return (
+        f"SELECT VendorID, AVG(tip_amount) "
+        f"FROM {{table}} WHERE tip_amount > 0 GROUP BY VendorID",
+        "nonzero_tip_groupby"
+    )
+
+
+
 def generate_random_queries(df, table):
     normal_query_generators = [
         random_groupby,
         random_topk_location,
         random_filter_range,
-        groupby_payment_and_passenger
+        groupby_payment_and_passenger,
+
+        # 加入新的 realistic 查询函数，只在mix时候运行，独自运行query的时候记得注释。
+        random_point_lookup,
+        random_datetime_range,
+        random_multi_column_filter,
+        tip_amount_above_zero
     ]
 
     heavy_query_generators = [
@@ -233,22 +298,29 @@ def generate_random_queries(df, table):
     queries = []
     for i in range(10):  # 每10轮
         # 先生成普通查询
-        for gen in normal_query_generators:
-            sql, qtype = gen(df)
+        for gen in random.sample(normal_query_generators, k=min(5, len(normal_query_generators))):
+            try:
+                sql, qtype = gen(df)
+                queries.append({
+                    'sql': sql.format(table=table),
+                    'type': qtype
+                })
+            except Exception as e:
+                print(f"⚠️ 忽略生成查询失败: {gen.__name__} -> {e}")
+
+        # 每轮添加一个 heavy 查询
+        heavy_gen = random.choice(heavy_query_generators)
+        try:
+            sql, qtype = heavy_gen(df)
             queries.append({
                 'sql': sql.format(table=table),
                 'type': qtype
             })
-
-        # 每隔一段时间，插入一个 heavy 查询
-        heavy_gen = random.choice(heavy_query_generators)
-        sql, qtype = heavy_gen(df)
-        queries.append({
-            'sql': sql.format(table=table),
-            'type': qtype
-        })
+        except Exception as e:
+            print(f"⚠️ 忽略 heavy 查询生成失败: {heavy_gen.__name__} -> {e}")
 
     return queries
+
 
 def create_indexes_duckdb(con, table_name):
     """
@@ -305,12 +377,27 @@ def run_query(con, sql):
 
 
 
+def wait_for_table(con, table, timeout=30):
+    import time
+    for _ in range(timeout):
+        try:
+            # 如果表存在，就直接返回
+            con.execute(f"SELECT 1 FROM {table} LIMIT 1")
+            print(f"✅ 表 {table} 已准备好")
+            return
+        except duckdb.CatalogException:
+            print(f"⏳ 等待表 {table} 创建中...")
+            time.sleep(1)
+    raise TimeoutError(f"❌ 表 {table} 在 {timeout} 秒内未出现")
+
 # --- 主测试逻辑：循环执行查询，实时写入日志 ---
 def benchmark_queries(db_path, table_name, sample_csv, log_path, rounds, max_seconds=None):
     df = pd.read_csv(sample_csv, nrows=10000)
+    print("Successfully loaded")
     con = duckdb.connect(db_path)
-    create_indexes_duckdb(con, table_name)
+    #create_indexes_duckdb(con, table_name)
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    wait_for_table(con, table_name, timeout=60)
     start_time = time.time()
 
     with open(log_path, 'a', encoding='utf-8') as f:

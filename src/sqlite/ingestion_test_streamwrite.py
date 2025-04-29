@@ -51,7 +51,7 @@ def simulate_random_streaming_sqlite(csv_file, db_file, table_name, log_file,
             # --- 从样本中随机抽取 batch_size 行 ---
             chosen_indices = random.choices(row_indices, k=batch_size)
             batch_df = all_data.iloc[chosen_indices].copy()
-
+            batch_df = perturb_batch(batch_df)
             # --- 时间列格式转换 ---
             for col in ['tpep_pickup_datetime', 'tpep_dropoff_datetime']:
                 if col in batch_df.columns:
@@ -136,6 +136,52 @@ def simulate_random_streaming_sqlite(csv_file, db_file, table_name, log_file,
             time.sleep(delay)
 
     conn.close()
+
+# --- 对样本数据进行扰动，使每次插入都像“新数据” ---
+def perturb_batch(batch):
+    for idx, row in batch.iterrows():
+        # 随机修改 trip_distance（±20%）
+        if 'trip_distance' in batch.columns and pd.notna(row['trip_distance']):
+            factor = random.uniform(0.8, 1.2)
+            batch.at[idx, 'trip_distance'] = round(float(row['trip_distance']) * factor, 2)
+
+        # 随机 total_amount 增减
+        if 'total_amount' in batch.columns and pd.notna(row['total_amount']):
+            noise = random.uniform(-5, 5)
+            batch.at[idx, 'total_amount'] = round(float(row['total_amount']) + noise, 2)
+
+        # passenger_count 随机 1~4
+        if 'passenger_count' in batch.columns:
+            batch.at[idx, 'passenger_count'] = random.randint(1, 4)
+
+        # tip_amount 重新随机 0~5 范围
+        if 'tip_amount' in batch.columns:
+            batch.at[idx, 'tip_amount'] = round(random.uniform(0, 5), 2)
+
+        # 时间偏移：pickup 加 1~30 分钟
+        if 'tpep_pickup_datetime' in batch.columns:
+            try:
+                dt = pd.to_datetime(row['tpep_pickup_datetime'], errors='coerce')
+                if pd.notna(dt):
+                    offset = pd.Timedelta(minutes=random.randint(1, 30))
+                    batch.at[idx, 'tpep_pickup_datetime'] = dt + offset
+            except:
+                pass
+
+        # dropoff 时间 + 5~20 分钟
+        if 'tpep_dropoff_datetime' in batch.columns:
+            try:
+                dt = pd.to_datetime(row['tpep_dropoff_datetime'], errors='coerce')
+                if pd.notna(dt):
+                    offset = pd.Timedelta(minutes=random.randint(5, 20))
+                    batch.at[idx, 'tpep_dropoff_datetime'] = dt + offset
+            except:
+                pass
+    return batch
+
+# 扰动后再继续处理
+batch_df = perturb_batch(batch_df)
+
 
 # --- CLI 参数解析 ---
 if __name__ == "__main__":

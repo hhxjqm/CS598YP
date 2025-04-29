@@ -138,18 +138,18 @@ cd /test
 #单表，随机行数插入，有波动。
 python -m src.duckdb.ingestion_test_streamwrite \
   --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
-  --db /test/db/duckdb/streamwrite_random.duckdb \
+  --db /test/db/duckdb/final/streamwrite_random.duckdb \
   --table yellow_taxi_test_streamwrite \
-  --log /test/log/duckdb/6/streamwrite_10min_random.jsonl \
-  --max-seconds 600 \
+  --log /test/log/duckdb/final/streamwrite_1h_random.jsonl \
+  --max-seconds 3600 \
   --delay-min 0.1 \
   --delay-max 1.0
 
 # 生成图表
 python -m src.duckdb.ingestion_plot_streamwrite \
-  --log /test/log/duckdb/6/streamwrite_10min_random.jsonl \
-  --out /test/plots/duckdb/6/streamwrite_10min_random.png \
-  --title "StreamWrite Ingestion - 1 Hour Test"
+  --log /test/log/duckdb/final/streamwrite_1h_random.jsonl \
+  --out /test/plots/duckdb/final/streamwrite_1h_random.png \
+  --title "StreamWrite Ingestion - 1 Hour Test(Random)"
 ```
 
 ```bash
@@ -178,13 +178,13 @@ python -m src.duckdb.query_test \
   --db /test/db/taxi_data.duckdb \
   --table yellow_taxi_trips \
   --sample /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
-  --log /test/log/duckdb/6/query_1h.jsonl \
-  --max-seconds 600
+  --log /test/log/duckdb/final/query_1h.jsonl \
+  --max-seconds 3600
 
 ```bash
-python -m src.duckdb.query_plot \
-  --log /test/log/duckdb/5/query_1h.jsonl \
-  --out /test/plots/duckdb/5/query_1h.png \
+python -m src.rocksdb.query_plot \
+  --log /test/log/duckdb/final/query_1h.jsonl \
+  --out /test/plots/duckdb/final/query_1h.png \
   --title "DuckDB Query Performance - 1 Hour Testing" \
   --width 15 \
   --height 8
@@ -196,14 +196,22 @@ duckdb不能同时读取相同的数据库文件。所以必须对被测数据�
 ```
 ./scripts/mixed_test.sh
 
-python /test/src/query_plot.py \
-  --log /test/log/test_runs/mixed_test_1h_log_query.jsonl \
-  --out /test/plots/mixed_test_query_1h_metrics.png \
-  --title "DuckDB Query Performance - 1 Hour Testing" \
+python /test/src/duckdb/query_plot.py \
+  --log /test/log/duckdb/final/mixed_test_1h_log_query.jsonl \
+  --out /test/plots/duckdb/final/mixed_test_query_1h_metrics.png \
+  --title "DuckDB Hybrid Workload Performance - Query - 1 Hour Testing" \
   --width 15 \
   --height 8
+  
+ /test/log/duckdb/final/mixed_test_1h_log_ingest.jsonl 
 ```
-
+```
+# 生成图表
+python /test/src/duckdb/ingestion_plot_streamwrite.py \
+  --log /test/log/duckdb/final/mixed_test_1h_log_ingest.jsonl  \
+  --out /test/plots/duckdb/6/streamwrite_1h_fixed.png \
+  --title "DuckDB StreamWrite Ingestion - 1 Hour Test"
+```
 
 
 
@@ -253,36 +261,36 @@ python -m src.duckdb.query_plot \
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 /test/src/rocksdb/build/ingestion_test_streamwrite \
   --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
-  --db /test/db/rocksdb/5/test_streamwrite.db \
-  --log /test/log/rocksdb/5/streamwrite_1h_fixed.jsonl \
-  --max-seconds 600 \
+  --db /test/db/rocksdb/final/test_streamwrite.db \
+  --log /test/log/rocksdb/final/streamwrite_1h_fixed.jsonl \
+  --max-seconds 3600 \
   --delay-min 0.1 \
   --delay-max 1.0 \
   --mode fixed_rows
 ```
 ```
 python -m src.duckdb.ingestion_plot_streamwrite \
-  --log /test/log/rocksdb/6/streamwrite_1h_random.jsonl \
-  --out /test/plots/rocksdb/6/streamwrite_1h_random.png \
-  --title "RocksDB StreamWrite Ingestion - 1 Hour Test"
+  --log /test/log/rocksdb/final/streamwrite_1h_random.jsonl \
+  --out /test/plots/rocksdb/final/streamwrite_1h_random.png \
+  --title "RocksDB StreamWrite Ingestion - 1 Hour Test(Random)"
 ```
 
 ```bash
 # 2. 随机行数
 /test/src/rocksdb/build/ingestion_test_streamwrite \
   --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
-  --db /test/db/rocksdb/6/test_streamwrite.db \
-  --log /test/log/rocksdb/6/streamwrite_1h_random.jsonl \
-  --max-seconds 600 \
+  --db /test/db/rocksdb/final/test_streamwrite.db \
+  --log /test/log/rocksdb/final/streamwrite_1h_random.jsonl \
+  --max-seconds 3600 \
   --delay-min 0.1 \
   --delay-max 1.0 \
 ```
 ```
 # 生成图表
 python /test/src/duckdb/ingestion_plot_streamwrite.py \
-  --log /test/log/rocksdb/6/streamwrite_1h_fixed.jsonl \
-  --out /test/plots/rocksdb/6/streamwrite_1h_fixed.png \
-  --title "RocksDB StreamWrite Ingestion - 1 Hour Test"
+  --log /test/log/rocksdb/final/streamwrite_1h_fixed.jsonl \
+  --out /test/plots/rocksdb/final/streamwrite_1h_fixed.png \
+  --title "RocksDB StreamWrite Ingestion - 1 Hour Test(fixed lines)"
 ```
 
 
@@ -291,13 +299,14 @@ python /test/src/duckdb/ingestion_plot_streamwrite.py \
 /test/src/rocksdb/build/query_test \
   --csv /test/data_set/2023_Yellow_Taxi_Trip_Data.csv \
   --db /test/db/rocksdb/taxi_data_rocksdb \
-  --log /test/log/rocksdb/5/query_1h.jsonl \
-  --max-seconds 600
+  --log /test/log/rocksdb/final/query_1h.jsonl \
+  --max-seconds 3600
 ```
 ```bash
+# 得在容器外面跑
 python -m src.rocksdb.query_plot \
-  --log /test/log/rocksdb/5/query_1h.jsonl \
-  --out /test/plots/rocksdb/5/query_1h.png \
+  --log log/rocksdb/final/query_1h.jsonl \
+  --out plots/rocksdb/final/query_1h.png \
   --title "RocksDB Query Performance - 1 Hour Testing" \
   --width 15 \
   --height 8 \
@@ -430,7 +439,7 @@ docker run --rm -it \
   --memory=4g --memory-swap=4g \
   --cpus=2 \
   -v "$PWD":/test \
-  duckdb-ingest
+  ingest
 ```
 
 ## 3. Run test1.py
