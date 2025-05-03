@@ -13,9 +13,8 @@ log_base_dir = 'log'
 chunk_size = 10000
 
 # Memory and threads configurations to test
-memory_limits = ['256MB', '512MB', '1GB', '4GB']
-threads_list = [1, 2, 4]
-
+memory_limits = ['4GB']
+threads_list = [4]
 # --- System resource monitoring ---
 def get_system_metrics():
     metrics = {}
@@ -131,12 +130,14 @@ def ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size, memo
 
 # --- Batch run all memory and threads settings ---
 if __name__ == "__main__":
+    repeats = 1
     for memory_limit in memory_limits:
         for threads in threads_list:
-            experiment_id = f"{memory_limit.replace('B','').lower()}_{threads}threads"
-            db_file = f"{db_base_dir}/taxi_data_{experiment_id}.duckdb"
-            log_file = f"{log_base_dir}/ingestion_log_{experiment_id}.jsonl"
-            table_name = 'yellow_taxi_trips'
+            for repeat_id in range(1, repeats + 1):
+                experiment_id = f"{memory_limit.replace('B','').lower()}_{threads}threads_run{repeat_id}"
+                db_file = f"{db_base_dir}/taxi_data_{experiment_id}.duckdb"
+                log_file = f"{log_base_dir}/ingestion_log_{experiment_id}.jsonl"
+                table_name = 'yellow_taxi_trips'
 
-            print(f"Running experiment: Memory={memory_limit}, Threads={threads}")
-            ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size, memory_limit, threads)
+                print(f"Running experiment: Memory={memory_limit}, Threads={threads}, Repeat={repeat_id}")
+                ingest_and_monitor(csv_file, db_file, table_name, log_file, chunk_size, memory_limit, threads)
